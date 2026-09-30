@@ -1,0 +1,76 @@
+{
+    "version": 6,
+    "cmakeMinimumRequired": {
+        "major": 3,
+        "minor": 25,
+        "patch": 0
+    },
+    "configurePresets": [
+        {
+            "name": "msvc",
+            "displayName": "MSVC (Visual Studio 18 2026, x64)",
+            "generator": "Visual Studio 18 2026",
+            "architecture": "x64",
+            "binaryDir": "${sourceDir}/build/msvc",
+            "cacheVariables": {
+                "CMAKE_CXX_STANDARD": "20",
+                "CMAKE_CXX_STANDARD_REQUIRED": "ON"
+            }
+        },
+        {
+            "name": "mingw",
+            "displayName": "MinGW (Ninja)",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build/mingw",
+            "cacheVariables": {
+                "CMAKE_CXX_COMPILER": "g++",
+                "CMAKE_CXX_STANDARD": "20",
+                "CMAKE_CXX_STANDARD_REQUIRED": "ON"
+            }
+        }
+    ],
+    "buildPresets": [
+        {
+            "name": "msvc-debug",
+            "displayName": "MSVC Debug",
+            "configurePreset": "msvc",
+            "configuration": "Debug"
+        },
+        {
+            "name": "msvc-release",
+            "displayName": "MSVC Release",
+            "configurePreset": "msvc",
+            "configuration": "Release"
+        },
+        {
+            "name": "mingw-debug",
+            "displayName": "Mingw Debug",
+            "configurePreset": "mingw",
+            "configuration": "Debug"
+        },
+        {
+            "name": "mingw-release",
+            "displayName": "Mingw Release",
+            "configurePreset": "mingw",
+            "configuration": "Release"
+        }
+    ],
+    "testPresets": [
+        {
+            "name": "msvc",
+            "displayName": "MSVC Tests",
+            "configurePreset": "msvc",
+            "output": {
+                "outputOnFailure": true
+            }
+        },
+        {
+            "name": "mingw",
+            "displayName": "MinGW Tests",
+            "configurePreset": "mingw",
+            "output": {
+                "outputOnFailure": true
+            }
+        }
+    ]
+}

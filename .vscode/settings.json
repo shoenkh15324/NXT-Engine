@@ -1,0 +1,6 @@
+{
+    "cmake.useCMakePresets": "always",
+    "cmake.modifyLists.addNewSourceFiles": "yes",
+    "cmake.outlineViewType": "tree"
+
+}

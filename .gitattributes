@@ -1,0 +1,14 @@
+# 텍스트 파일은 저장소와 작업 디스크 모두 LF로 통일
+* text=auto eol=lf
+
+# Windows 스크립트만 CRLF 유지
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# 에셋 바이너리 (엔진이므로 명시적으로 고정)
+*.png binary
+*.jpg binary
+*.dds binary
+*.hdr binary
+*.ktx2 binary
