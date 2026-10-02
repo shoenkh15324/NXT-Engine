@@ -1,6 +1,0 @@
-{
-    "cmake.useCMakePresets": "always",
-    "cmake.modifyLists.addNewSourceFiles": "yes",
-    "cmake.outlineViewType": "tree",
-    "clang-format.executable": "C:\\Users\\mok07\\scoop\\apps\\llvm\\current\\bin\\clang-format.exe"
-}

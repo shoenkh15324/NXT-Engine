@@ -1,6 +1,8 @@
 build/
 out/
 .vs/
+.vscode/
+.clang-format
 install/
 compile_commands.json
 external/
