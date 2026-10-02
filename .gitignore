@@ -1,8 +1,8 @@
 build/
 out/
 .vs/
+# 머신 전용 절대 경로를 담고 있어 공유 대상이 아니다. 서식 규칙(.clang-format)은 공유한다.
 .vscode/
-.clang-format
 install/
 compile_commands.json
 external/

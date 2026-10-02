@@ -1,0 +1,98 @@
+---
+Language: Cpp
+BasedOnStyle: LLVM
+Standard: c++20
+
+# ============================================================
+# Indentation
+# ============================================================
+
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+IndentAccessModifiers: true
+
+# ============================================================
+# Line length
+# ============================================================
+
+ColumnLimit: 120
+
+# ============================================================
+# Braces
+# ============================================================
+
+BreakBeforeBraces: Attach
+InsertBraces: true
+
+# ============================================================
+# Parentheses
+# ============================================================
+
+SpaceBeforeParens: ControlStatements
+SpacesInParens: Never
+
+# ============================================================
+# Pointer / Reference
+# ============================================================
+
+PointerAlignment: Left
+ReferenceAlignment: Pointer
+DerivePointerAlignment: false
+
+# ============================================================
+# Includes
+# ============================================================
+
+# Include 순서 및 그룹을 자동 정리
+SortIncludes:
+  Enabled: true
+IncludeBlocks: Regroup
+
+# ============================================================
+# Short functions / blocks
+# ============================================================
+
+# 빈 함수만 한 줄 허용
+AllowShortFunctionsOnASingleLine: Empty
+
+# 짧은 if / loop / block도 한 줄로 축약하지 않음
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+AllowShortBlocksOnASingleLine: Never
+
+# ============================================================
+# Constructor initializer
+# ============================================================
+
+# 가능한 경우 initializer를 한 줄에 묶음
+PackConstructorInitializers: BinPack
+ConstructorInitializerAllOnOneLineOrOnePerLine: true
+BreakConstructorInitializersBeforeComma: false
+
+# ============================================================
+# Function arguments / parameters
+# ============================================================
+
+# 가능한 한 인자를 한 줄에 묶음
+BinPackArguments: true
+BinPackParameters: true
+
+# ============================================================
+# Preprocessor
+# ============================================================
+
+# 중첩된 #if/#endif를 코드처럼 들여씀
+IndentPPDirectives: BeforeHash
+
+# ============================================================
+# Empty lines
+# ============================================================
+
+MaxEmptyLinesToKeep: 1
+
+# ============================================================
+# End of file
+# ============================================================
+
+InsertNewlineAtEOF: true
