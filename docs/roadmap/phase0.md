@@ -17,12 +17,14 @@ src/nxt/core/
 
 handle/
     handle.hpp
+    handle_manager.hpp
 
 time/
     timer.hpp
 
 diagnostics/
     assert.hpp
+    assert.cpp
     log.hpp
     log.cpp
     profiler.hpp
@@ -30,11 +32,8 @@ diagnostics/
 
 memory/
     allocator.hpp
-    linear_arena.hpp
-    linear_arena.cpp
     pool.hpp
-    frame_allocator.hpp
-    frame_allocator.cpp
+    arena.hpp
 
 containers/
     intrusive_list.hpp
@@ -90,8 +89,10 @@ event/
 
 ```text
 handle.hpp
+handle_manager.hpp
 timer.hpp
 assert.hpp
+assert.cpp
 ```
 
 ### Handle
@@ -110,6 +111,10 @@ stale handle을 검출할 수 있어야 한다.
 - stale handle 검출
 - timer 측정
 - assert macro 동작
+
+assert macro의 검증 범위는 조건이 참인 경로와 조건 평가 여부에 한정된다.
+실패 경로는 프로세스를 끝내므로 in-process 테스트로 확인할 수 없다. 실패
+보고가 올바른 정보를 전달하는지는 `report`와 분리된 `notify` 경로로 검증한다.
 
 ---
 

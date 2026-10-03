@@ -2,6 +2,7 @@
 
 add_library(nxt_core STATIC
     diagnostics/log.cpp
+    diagnostics/assert.cpp
 )
 
 target_sources(nxt_core
@@ -11,6 +12,8 @@ target_sources(nxt_core
         FILES
             handle/handle.hpp
             handle/handle_manager.hpp
+            diagnostics/assert.hpp
+            time/timer.hpp
 )
 
 target_include_directories(nxt_core PUBLIC "${PROJECT_SOURCE_DIR}/src")

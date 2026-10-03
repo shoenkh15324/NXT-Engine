@@ -11,6 +11,8 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS ON)
 
+# 소스는 UTF-8 BOM 없이 저장한다. MSVC의 기본 소스 코드 페이지는 시스템 ACP이므로
+# 한국어 주석이 있는 상태에서는 이 플래그가 없으면 C4819가 발생한다.
 if(MSVC)
     add_compile_options(/utf-8)
 endif()
