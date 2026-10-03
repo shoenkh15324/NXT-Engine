@@ -14,7 +14,8 @@
             "binaryDir": "${sourceDir}/build/msvc",
             "cacheVariables": {
                 "CMAKE_CXX_STANDARD": "20",
-                "CMAKE_CXX_STANDARD_REQUIRED": "ON"
+                "CMAKE_CXX_STANDARD_REQUIRED": "ON",
+                "NXT_BUILD_TESTS": "ON"
             }
         },
         {
@@ -25,7 +26,8 @@
             "cacheVariables": {
                 "CMAKE_CXX_COMPILER": "g++",
                 "CMAKE_CXX_STANDARD": "20",
-                "CMAKE_CXX_STANDARD_REQUIRED": "ON"
+                "CMAKE_CXX_STANDARD_REQUIRED": "ON",
+                "NXT_BUILD_TESTS": "ON"
             }
         }
     ],
@@ -60,6 +62,7 @@
             "name": "msvc",
             "displayName": "MSVC Tests",
             "configurePreset": "msvc",
+            "configuration": "Debug",
             "output": {
                 "outputOnFailure": true
             }
@@ -68,6 +71,7 @@
             "name": "mingw",
             "displayName": "MinGW Tests",
             "configurePreset": "mingw",
+            "configuration": "Debug",
             "output": {
                 "outputOnFailure": true
             }
