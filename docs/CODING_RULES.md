@@ -232,11 +232,9 @@ seq_cst
 Concurrent type의 구현이 복잡한 경우 코드 또는 문서에 synchronization contract를 명시한다.
 
 
-## 10. Logging / Diagnostics
+## 10. Process I/O
 
-Core는 직접 stdout/stderr로 출력하지 않는다.
-
-다음과 같은 직접 출력은 사용하지 않는다.
+Core는 프로세스 입출력을 소유하지 않는다. 표준 입출력에 직접 쓰지 않는다.
 
 ```cpp
 std::cout
@@ -244,17 +242,17 @@ std::cerr
 printf
 ```
 
-Diagnostics 또는 logging abstraction을 통해 외부 sink로 전달한다.
+출력이 필요하다면 상위 레이어가 소유하는 경로로 넘긴다. 그 경로가 무엇인지는
+각 단계의 문서가 정한다.
 
-예:
+단, 실패 경로는 예외다. 종료 조건을 보고하는 기록은 그 경로에 의존하면 안 된다.
+그 경로가 동작하지 않을 때 실패 보고까지 사라지는 것은 허용되지 않고, 곧바로
+종료하므로 보낼 곳도 없다. 직접 기록한 뒤 flush하고 종료한다.
 
-```cpp
-nxt::diag::log(...);
-```
+이 예외는 실패 경로에만 적용한다. 복구 가능한 오류는 §5의 Error와 반환값으로
+표현한다.
 
-단, 단순한 로컬 디버깅 과정에서 일시적인 출력 코드를 사용하는 것까지 엄격하게 금지하지 않는다.
-
-Debugging 코드가 실제 코드에 남는 경우에는 적절한 diagnostics abstraction으로 교체한다.
+단, 단순한 로컬 디버깅 과정에서 일시적인 출력 코드를 사용하는 것까지 엄격하게 금지하지 않는다. Debugging 코드가 실제 코드에 남는 경우에는 적절한 diagnostics abstraction으로 교체한다.
 
 
 ## 11. Assertion
@@ -279,6 +277,8 @@ Assertion은 일반적인 runtime error handling의 대체 수단으로 사용�
 프로그래머 오류 / 불변식 위반
     → assertion
 ```
+
+Assertion 실패 보고는 §10의 **실패 경로**다. 그 경로에 의존하지 않는다.
 
 
 ## 12. Ownership과 Lifetime
