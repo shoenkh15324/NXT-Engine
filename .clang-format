@@ -10,7 +10,8 @@ Standard: c++20
 IndentWidth: 4
 TabWidth: 4
 UseTab: Never
-IndentAccessModifiers: true
+IndentAccessModifiers: false
+AccessModifierOffset: -4
 
 # ============================================================
 # Line length
@@ -96,3 +97,9 @@ MaxEmptyLinesToKeep: 1
 # ============================================================
 
 InsertNewlineAtEOF: true
+
+# ============================================================
+# Template
+# ============================================================
+
+AlwaysBreakTemplateDeclarations: Yes
