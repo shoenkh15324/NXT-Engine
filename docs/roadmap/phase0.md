@@ -20,6 +20,7 @@ handle/
     handle_manager.hpp
 
 time/
+    time.hpp
     timer.hpp
 
 diagnostics/
