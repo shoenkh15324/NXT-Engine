@@ -90,6 +90,7 @@ event/
 ```text
 handle.hpp
 handle_manager.hpp
+time.hpp
 timer.hpp
 assert.hpp
 assert.cpp

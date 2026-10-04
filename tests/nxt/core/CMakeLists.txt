@@ -5,6 +5,7 @@ add_executable(nxt_core_tests
     handle_test.cpp
     assert_test.cpp
     timer_test.cpp
+    time_test.cpp
 )
 
 target_link_libraries(nxt_core_tests PRIVATE

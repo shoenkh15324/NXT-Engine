@@ -13,6 +13,7 @@ target_sources(nxt_core
             handle/handle.hpp
             handle/handle_manager.hpp
             diagnostics/assert.hpp
+            time/time.hpp
             time/timer.hpp
 )
 
