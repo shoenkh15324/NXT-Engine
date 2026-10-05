@@ -2,7 +2,6 @@
 #include <cstdlib>
 #include <nxt/core/diagnostics/assert.hpp>
 
-
 namespace nxt::diag {
 
 namespace {
@@ -35,7 +34,8 @@ void notifyAssertFailure(const AssertInfo& info) noexcept {
     gAssertHandler(info);
 }
 
-[[noreturn]] void reportAssertFailure(const AssertInfo& info) noexcept {
+[[noreturn]]
+void reportAssertFailure(const AssertInfo& info) noexcept {
     notifyAssertFailure(info);
     // 기본 핸들러는 위에서 종료하지만, 교체된 핸들러가 복귀할 수 있으므로 여기서 끝낸다.
     std::abort();
