@@ -4,6 +4,7 @@ add_executable(nxt_core_tests
     main.cpp
     handle_test.cpp
     assert_test.cpp
+    log_test.cpp
     timer_test.cpp
     time_test.cpp
 )
