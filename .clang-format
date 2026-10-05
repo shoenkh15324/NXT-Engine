@@ -12,6 +12,7 @@ TabWidth: 4
 UseTab: Never
 IndentAccessModifiers: false
 AccessModifierOffset: -4
+IndentCaseLabels: true
 
 # ============================================================
 # Line length
@@ -103,3 +104,9 @@ InsertNewlineAtEOF: true
 # ============================================================
 
 AlwaysBreakTemplateDeclarations: Yes
+
+# ============================================================
+# Enum
+# ============================================================
+
+AllowShortEnumsOnASingleLine: false
