@@ -13,3 +13,4 @@ FetchContent_Declare(doctest
 FetchContent_MakeAvailable(doctest)
 
 add_subdirectory(nxt/core)
+add_subdirectory(nxt/platform)

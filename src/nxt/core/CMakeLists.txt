@@ -1,8 +1,8 @@
 # src/nxt/core/CMakeLists.txt
 
 add_library(nxt_core STATIC
-    diagnostics/log.cpp
     diagnostics/assert.cpp
+    diagnostics/log.cpp
 )
 
 target_sources(nxt_core
@@ -13,6 +13,7 @@ target_sources(nxt_core
             handle/handle.hpp
             handle/handle_manager.hpp
             diagnostics/assert.hpp
+            diagnostics/log.hpp
             time/time.hpp
             time/timer.hpp
 )
