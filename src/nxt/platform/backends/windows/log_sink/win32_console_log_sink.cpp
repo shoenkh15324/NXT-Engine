@@ -68,7 +68,8 @@ std::string_view ansiSequence(const LogColor color) noexcept {
 }
 
 /**
- * 로그는 사람이 읽는 기록이므로 연월일을 함께 남긴다.
+ * 콘솔에는 시:분:초만 남긴다.
+ * 연월일은 파일 Sink가 담당한다. 콘솔에서 날짜까지 보면 한 줄이 너무 길어진다.
  * 밀리초는 사람이 읽기에 쓸모가 있어 초 단위까지만 남긴다.
  */
 [[nodiscard]]

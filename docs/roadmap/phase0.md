@@ -136,12 +136,23 @@ Logger → Sink
 
 여러 worker에서 동시에 로그를 기록해도 메시지가 손실되거나 서로 섞이지 않아야 한다.
 
+로그 정책과 판정만 core가 소유한다. 실제 출력은 platform 계층의 Sink가 담당한다.
+상세 결정 사항은 `docs/design/logging.md`를 따른다.
+
 ### 완료
 
 - single-thread logging
 - multi-thread logging
 - sink injection
 - thread-safe output
+- multi-sink fan-out
+- console sink
+- file sink
+
+### 남은 것
+
+- async logging
+- file rotation
 
 ---
 
