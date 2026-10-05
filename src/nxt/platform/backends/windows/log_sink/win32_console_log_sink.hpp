@@ -10,7 +10,7 @@
 
 namespace nxt::platform::windows::log {
 
-using namespace nxt::log;
+using namespace nxt::core::log;
 
 /**
  * @brief 콘솔 출력에 사용할 색상을 나타낸다.

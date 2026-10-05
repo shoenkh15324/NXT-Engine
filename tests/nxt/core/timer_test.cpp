@@ -6,9 +6,9 @@
 
 namespace {
 
-using nxt::time::kNsPerMs;
-using nxt::time::kNsPerUs;
-using nxt::time::Timer;
+using nxt::core::time::kNsPerMs;
+using nxt::core::time::kNsPerUs;
+using nxt::core::time::Timer;
 
 // steady_clock은 지정 시간보다 일찍 지나가지 않으므로 하한으로 쓸 수 있다.
 // 상한은 검증하지 않는다. OS가 슬립을 더 길게 만들 수 있기 때문이다.

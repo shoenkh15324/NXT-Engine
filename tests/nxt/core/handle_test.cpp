@@ -6,8 +6,8 @@ namespace {
 
 struct TestTag;
 
-using TestHandle = nxt::handle::Handle<TestTag>;
-using TestManager = nxt::handle::HandleManager<TestTag>;
+using TestHandle = nxt::core::handle::Handle<TestTag>;
+using TestManager = nxt::core::handle::HandleManager<TestTag>;
 
 } // namespace
 
@@ -16,7 +16,7 @@ TEST_CASE("기본 생성한 핸들은 유효하지 않다") {
 
     CHECK_FALSE(handle.valid());
     CHECK(handle == TestHandle::invalid());
-    CHECK(handle.index() == nxt::handle::kInvalidIndex);
+    CHECK(handle.index() == nxt::core::handle::kInvalidIndex);
 }
 
 TEST_CASE("make로 만든 핸들은 유효하고 값을 보존한다") {
@@ -39,7 +39,7 @@ TEST_CASE("비교 연산은 defaulted 연산자로부터 파생된다") {
 }
 
 TEST_CASE("index가 무효값이면 세대가 있어도 유효하지 않다") {
-    CHECK_FALSE(TestHandle::make(nxt::handle::kInvalidIndex, 1u).valid());
+    CHECK_FALSE(TestHandle::make(nxt::core::handle::kInvalidIndex, 1u).valid());
 }
 
 TEST_CASE("manager가 만든 핸들은 유효하다") {

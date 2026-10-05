@@ -4,10 +4,10 @@
 
 namespace {
 
-nxt::diag::AssertInfo gReceived{};
+nxt::core::diag::AssertInfo gReceived{};
 int gCallCount = 0;
 
-void recordingHandler(const nxt::diag::AssertInfo& info) noexcept {
+void recordingHandler(const nxt::core::diag::AssertInfo& info) noexcept {
     gReceived = info;
     ++gCallCount;
 }
@@ -15,9 +15,9 @@ void recordingHandler(const nxt::diag::AssertInfo& info) noexcept {
 } // namespace
 
 TEST_CASE("notify는 등록된 핸들러에 정보를 그대로 전달한다") {
-    nxt::diag::setAssertHandler(&recordingHandler);
+    nxt::core::diag::setAssertHandler(&recordingHandler);
 
-    nxt::diag::notifyAssertFailure({"a == b", "a와 b가 달라야 한다", "assert_test.cpp", "test_case", 17});
+    nxt::core::diag::notifyAssertFailure({"a == b", "a와 b가 달라야 한다", "assert_test.cpp", "test_case", 17});
 
     CHECK(gCallCount == 1);
     CHECK(std::string(gReceived.expression) == "a == b");
@@ -29,7 +29,7 @@ TEST_CASE("notify는 등록된 핸들러에 정보를 그대로 전달한다") {
 
 TEST_CASE("조건을 만족하면 핸들러가 호출되지 않는다") {
     gCallCount = 0;
-    nxt::diag::setAssertHandler(&recordingHandler);
+    nxt::core::diag::setAssertHandler(&recordingHandler);
 
     const int value = 1;
     NXT_ASSERT(value == 1);

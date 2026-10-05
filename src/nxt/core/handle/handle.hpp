@@ -4,7 +4,7 @@
 #include <cstdint>
 #include <limits>
 
-namespace nxt::handle {
+namespace nxt::core::handle {
 
 /// @brief 슬롯 인덱스가 유효하지 않음을 나타내는 값이다.
 inline constexpr std::uint32_t kInvalidIndex = (std::numeric_limits<std::uint32_t>::max)();
@@ -93,4 +93,4 @@ private:
     std::uint32_t generation_{0};
 };
 
-} // namespace nxt::handle
+} // namespace nxt::core::handle

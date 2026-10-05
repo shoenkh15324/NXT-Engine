@@ -1,7 +1,7 @@
 #include <nxt/core/diagnostics/log.hpp>
 #include <utility>
 
-namespace nxt::log {
+namespace nxt::core::log {
 
 namespace {
 
@@ -139,4 +139,4 @@ std::string_view toString(const LogCategory category) noexcept {
     return "Unknown";
 }
 
-} // namespace nxt::log
+} // namespace nxt::core::log

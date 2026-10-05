@@ -14,7 +14,7 @@
 #include <thread>
 #include <utility>
 
-namespace nxt::log {
+namespace nxt::core::log {
 
 /**
  * @brief 로그 메시지의 심각도를 나타낸다.
@@ -277,32 +277,32 @@ std::string formatMessage(std::format_string<Args...> fmt, Args&&... args) {
     return std::format(fmt, std::forward<Args>(args)...);
 }
 
-} // namespace nxt::log
+} // namespace nxt::core::log
 
 // -----------------------------------------------------------------------------
 // 전역 로깅 프론트엔드
 // -----------------------------------------------------------------------------
 
 #define NXT_LOG_TRACE(category, ...)                                                                                   \
-    ::nxt::log::log(::nxt::log::LogLevel::Trace, ::nxt::log::LogCategory::category,                                    \
-                    ::nxt::log::formatMessage(__VA_ARGS__), std::source_location::current())
+    ::nxt::core::log::log(::nxt::core::log::LogLevel::Trace, ::nxt::core::log::LogCategory::category,                  \
+                          ::nxt::core::log::formatMessage(__VA_ARGS__), std::source_location::current())
 
 #define NXT_LOG_DEBUG(category, ...)                                                                                   \
-    ::nxt::log::log(::nxt::log::LogLevel::Debug, ::nxt::log::LogCategory::category,                                    \
-                    ::nxt::log::formatMessage(__VA_ARGS__), std::source_location::current())
+    ::nxt::core::log::log(::nxt::core::log::LogLevel::Debug, ::nxt::core::log::LogCategory::category,                  \
+                          ::nxt::core::log::formatMessage(__VA_ARGS__), std::source_location::current())
 
 #define NXT_LOG_INFO(category, ...)                                                                                    \
-    ::nxt::log::log(::nxt::log::LogLevel::Info, ::nxt::log::LogCategory::category,                                     \
-                    ::nxt::log::formatMessage(__VA_ARGS__), std::source_location::current())
+    ::nxt::core::log::log(::nxt::core::log::LogLevel::Info, ::nxt::core::log::LogCategory::category,                   \
+                          ::nxt::core::log::formatMessage(__VA_ARGS__), std::source_location::current())
 
 #define NXT_LOG_WARN(category, ...)                                                                                    \
-    ::nxt::log::log(::nxt::log::LogLevel::Warn, ::nxt::log::LogCategory::category,                                     \
-                    ::nxt::log::formatMessage(__VA_ARGS__), std::source_location::current())
+    ::nxt::core::log::log(::nxt::core::log::LogLevel::Warn, ::nxt::core::log::LogCategory::category,                   \
+                          ::nxt::core::log::formatMessage(__VA_ARGS__), std::source_location::current())
 
 #define NXT_LOG_ERROR(category, ...)                                                                                   \
-    ::nxt::log::log(::nxt::log::LogLevel::Error, ::nxt::log::LogCategory::category,                                    \
-                    ::nxt::log::formatMessage(__VA_ARGS__), std::source_location::current())
+    ::nxt::core::log::log(::nxt::core::log::LogLevel::Error, ::nxt::core::log::LogCategory::category,                  \
+                          ::nxt::core::log::formatMessage(__VA_ARGS__), std::source_location::current())
 
 #define NXT_LOG_FATAL(category, ...)                                                                                   \
-    ::nxt::log::log(::nxt::log::LogLevel::Fatal, ::nxt::log::LogCategory::category,                                    \
-                    ::nxt::log::formatMessage(__VA_ARGS__), std::source_location::current())
+    ::nxt::core::log::log(::nxt::core::log::LogLevel::Fatal, ::nxt::core::log::LogCategory::category,                  \
+                          ::nxt::core::log::formatMessage(__VA_ARGS__), std::source_location::current())

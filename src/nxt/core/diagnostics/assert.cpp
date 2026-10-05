@@ -2,7 +2,7 @@
 #include <cstdlib>
 #include <nxt/core/diagnostics/assert.hpp>
 
-namespace nxt::diag {
+namespace nxt::core::diag {
 
 namespace {
 
@@ -45,4 +45,4 @@ void setAssertHandler(AssertHandler handler) noexcept {
     gAssertHandler = (handler != nullptr) ? handler : &defaultAssertHandler;
 }
 
-} // namespace nxt::diag
+} // namespace nxt::core::diag

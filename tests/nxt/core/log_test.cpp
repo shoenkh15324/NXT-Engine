@@ -6,15 +6,15 @@
 
 namespace {
 
-using nxt::log::LogCategory;
-using nxt::log::LogLevel;
-using nxt::log::LogRecord;
+using nxt::core::log::LogCategory;
+using nxt::core::log::LogLevel;
+using nxt::core::log::LogRecord;
 
 /**
  * 전달 여부와 레코드 내용을 함께 확인하는 sink다.
  * LogManager가 무엇을 전달하는지 관찰하는 용도이며 콘솔이나 파일로 쓰지 않는다.
  */
-class RecordingSink : public nxt::log::LogSink {
+class RecordingSink : public nxt::core::log::LogSink {
 public:
     void write(const LogRecord& record) noexcept override {
         records_.push_back(record);
@@ -51,7 +51,7 @@ private:
  * manager를 역참조해 segfault가 난다.
  */
 RecordingSink gSink;
-nxt::log::LogManager gManager(gSink);
+nxt::core::log::LogManager gManager(gSink);
 
 /**
  * 테스트 사이에 새는 전역 상태를 초기 상태로 되돌린다.
@@ -64,7 +64,7 @@ void resetGlobal() {
                                        LogCategory::Graphics, LogCategory::Assets, LogCategory::Engine}) {
         gManager.resetCategoryLevel(category);
     }
-    nxt::log::setLogManager(gManager);
+    nxt::core::log::setLogManager(gManager);
 }
 
 /**
@@ -79,12 +79,12 @@ std::string text(const std::string_view value) {
 
 [[nodiscard]]
 std::string levelName(const LogLevel level) {
-    return text(nxt::log::toString(level));
+    return text(nxt::core::log::toString(level));
 }
 
 [[nodiscard]]
 std::string categoryName(const LogCategory category) {
-    return text(nxt::log::toString(category));
+    return text(nxt::core::log::toString(category));
 }
 
 } // namespace
@@ -99,10 +99,10 @@ TEST_CASE("전역 레벨보다 낮은 로그는 sink에 전달되지 않는다")
     resetGlobal();
     gManager.setLevel(LogLevel::Error);
 
-    nxt::log::log(LogLevel::Info, LogCategory::Core, "filtered out");
+    nxt::core::log::log(LogLevel::Info, LogCategory::Core, "filtered out");
     CHECK(gSink.count() == 0);
 
-    nxt::log::log(LogLevel::Error, LogCategory::Core, "passed through");
+    nxt::core::log::log(LogLevel::Error, LogCategory::Core, "passed through");
     CHECK(gSink.count() == 1);
     CHECK(levelName(gSink.last().level) == levelName(LogLevel::Error));
 }
@@ -111,11 +111,11 @@ TEST_CASE("레벨 경계값은 유효 레벨과 같을 때 통과한다") {
     resetGlobal();
     gManager.setLevel(LogLevel::Warn);
 
-    nxt::log::log(LogLevel::Info, LogCategory::Core, "below boundary");
+    nxt::core::log::log(LogLevel::Info, LogCategory::Core, "below boundary");
     CHECK(gSink.count() == 0);
 
     // 결정사항 §3의 규칙은 level >= effectiveLevel이므로 경계값은 통과한다.
-    nxt::log::log(LogLevel::Warn, LogCategory::Core, "on boundary");
+    nxt::core::log::log(LogLevel::Warn, LogCategory::Core, "on boundary");
     CHECK(gSink.count() == 1);
 }
 
@@ -123,10 +123,10 @@ TEST_CASE("카테고리 override가 없을 때 전역 레벨을 사용한다") {
     resetGlobal();
     gManager.setLevel(LogLevel::Warn);
 
-    nxt::log::log(LogLevel::Info, LogCategory::Renderer, "filtered out");
+    nxt::core::log::log(LogLevel::Info, LogCategory::Renderer, "filtered out");
     CHECK(gSink.count() == 0);
 
-    nxt::log::log(LogLevel::Warn, LogCategory::Renderer, "passed through");
+    nxt::core::log::log(LogLevel::Warn, LogCategory::Renderer, "passed through");
     CHECK(gSink.count() == 1);
 }
 
@@ -136,12 +136,12 @@ TEST_CASE("카테고리 override는 그 카테고리에만 적용된다") {
     gManager.setCategoryLevel(LogCategory::Renderer, LogLevel::Trace);
 
     // 전역은 Error지만 Renderer는 Trace로 덮였으므로 Info도 통과한다.
-    nxt::log::log(LogLevel::Info, LogCategory::Renderer, "renderer override");
+    nxt::core::log::log(LogLevel::Info, LogCategory::Renderer, "renderer override");
     CHECK(gSink.count() == 1);
     CHECK(categoryName(gSink.last().category) == categoryName(LogCategory::Renderer));
 
     // 다른 카테고리는 전역 레벨을 그대로 따른다.
-    nxt::log::log(LogLevel::Info, LogCategory::Core, "core follows global");
+    nxt::core::log::log(LogLevel::Info, LogCategory::Core, "core follows global");
     CHECK(gSink.count() == 1);
 }
 
@@ -151,9 +151,9 @@ TEST_CASE("카테고리마다 다른 override를 줄 수 있다") {
     gManager.setCategoryLevel(LogCategory::Renderer, LogLevel::Trace);
     gManager.setCategoryLevel(LogCategory::Core, LogLevel::Warn);
 
-    nxt::log::log(LogLevel::Debug, LogCategory::Renderer, "renderer");
-    nxt::log::log(LogLevel::Info, LogCategory::Core, "core filtered");
-    nxt::log::log(LogLevel::Warn, LogCategory::Core, "core boundary");
+    nxt::core::log::log(LogLevel::Debug, LogCategory::Renderer, "renderer");
+    nxt::core::log::log(LogLevel::Info, LogCategory::Core, "core filtered");
+    nxt::core::log::log(LogLevel::Warn, LogCategory::Core, "core boundary");
 
     CHECK(gSink.count() == 2);
 }
@@ -165,7 +165,7 @@ TEST_CASE("resetCategoryLevel은 전역 레벨로 되돌린다") {
 
     gManager.resetCategoryLevel(LogCategory::Renderer);
 
-    nxt::log::log(LogLevel::Info, LogCategory::Renderer, "back to global");
+    nxt::core::log::log(LogLevel::Info, LogCategory::Renderer, "back to global");
     CHECK(gSink.count() == 0);
 }
 
@@ -182,13 +182,13 @@ TEST_CASE("categoryLevel은 override가 없으면 전역 레벨을 반환한다"
 TEST_CASE("logManager는 등록된 manager를 반환한다") {
     resetGlobal();
 
-    CHECK(nxt::log::logManager() == &gManager);
+    CHECK(nxt::core::log::logManager() == &gManager);
 }
 
 TEST_CASE("LogRecord는 메시지와 발신 정보를 모두 담는다") {
     resetGlobal();
 
-    nxt::log::log(LogLevel::Info, LogCategory::Assets, "record fields");
+    nxt::core::log::log(LogLevel::Info, LogCategory::Assets, "record fields");
 
     REQUIRE(gSink.count() == 1);
 
@@ -269,7 +269,7 @@ TEST_CASE("포맷이 필요 없는 메시지도 그대로 기록된다") {
 }
 
 TEST_CASE("formatMessage는 문자열만 받아도 동작한다") {
-    const std::string message = nxt::log::formatMessage("plain message");
+    const std::string message = nxt::core::log::formatMessage("plain message");
 
     CHECK(message == text("plain message"));
 }
@@ -307,8 +307,8 @@ TEST_CASE("Sink가 여러 개면 모두 같은 레코드를 받는다") {
     RecordingSink first;
     RecordingSink second;
 
-    nxt::log::LogSink* sinks[] = {&first, &second};
-    nxt::log::LogManager manager(sinks);
+    nxt::core::log::LogSink* sinks[] = {&first, &second};
+    nxt::core::log::LogManager manager(sinks);
 
     // 전역 manager가 아니라 지역 manager를 직접 쓴다.
     // 전역 로깅 함수는 gManager로 가므로 지역 manager를 관찰할 수 없다.
@@ -330,8 +330,8 @@ TEST_CASE("필터는 Sink 수와 무관하게 한 번만 동작한다") {
     RecordingSink first;
     RecordingSink second;
 
-    nxt::log::LogSink* sinks[] = {&first, &second};
-    nxt::log::LogManager manager(sinks);
+    nxt::core::log::LogSink* sinks[] = {&first, &second};
+    nxt::core::log::LogManager manager(sinks);
     manager.setLevel(LogLevel::Error);
 
     manager.write(LogLevel::Info, LogCategory::Core, "filtered out");
@@ -345,8 +345,8 @@ TEST_CASE("Sink 목록이 비면 아무것도 기록되지 않는다") {
     resetGlobal();
 
     RecordingSink sink;
-    nxt::log::LogSink* sinks[] = {nullptr};
-    nxt::log::LogManager manager(sinks);
+    nxt::core::log::LogSink* sinks[] = {nullptr};
+    nxt::core::log::LogManager manager(sinks);
 
     // nullptr은 건너뛰므로 크래시 없이 아무것도 하지 않는다.
     manager.write(LogLevel::Fatal, LogCategory::Core, "null sink");
@@ -356,12 +356,12 @@ TEST_CASE("Sink 하나로 만든 manager와 여러 개로 만든 manager는 같�
     resetGlobal();
 
     RecordingSink single;
-    nxt::log::LogManager singleManager(single);
+    nxt::core::log::LogManager singleManager(single);
 
     RecordingSink first;
     RecordingSink second;
-    nxt::log::LogSink* sinks[] = {&first, &second};
-    nxt::log::LogManager multiManager(sinks);
+    nxt::core::log::LogSink* sinks[] = {&first, &second};
+    nxt::core::log::LogManager multiManager(sinks);
 
     singleManager.setLevel(LogLevel::Info);
     multiManager.setLevel(LogLevel::Info);
@@ -380,6 +380,6 @@ TEST_CASE("Sink 하나로 만든 manager와 여러 개로 만든 manager는 같�
 
 TEST_CASE("LogManager는 복사할 수 없다") {
     // manager는 sink 참조를 들고 있어 복사하면 이중 해제가 된다.
-    CHECK_FALSE(std::is_copy_constructible_v<nxt::log::LogManager>);
-    CHECK_FALSE(std::is_copy_assignable_v<nxt::log::LogManager>);
+    CHECK_FALSE(std::is_copy_constructible_v<nxt::core::log::LogManager>);
+    CHECK_FALSE(std::is_copy_assignable_v<nxt::core::log::LogManager>);
 }

@@ -1,6 +1,6 @@
 #pragma once
 
-namespace nxt::diag {
+namespace nxt::core::diag {
 
 /// @brief assertion 실패를 담는 정보 구조체이다.
 struct AssertInfo {
@@ -45,7 +45,7 @@ void reportAssertFailure(const AssertInfo& info) noexcept;
  */
 void setAssertHandler(AssertHandler handler) noexcept;
 
-} // namespace nxt::diag
+} // namespace nxt::core::diag
 
 /**
  * @brief 프로그래머 오류와 불변식 위반을 검증한다.
@@ -66,28 +66,28 @@ void setAssertHandler(AssertHandler handler) noexcept;
     #define NXT_ASSERT(expression)                                                                                     \
         do {                                                                                                           \
             if (!(expression)) {                                                                                       \
-                ::nxt::diag::reportAssertFailure({#expression, nullptr, __FILE__, __func__, __LINE__});                \
+                ::nxt::core::diag::reportAssertFailure({#expression, nullptr, __FILE__, __func__, __LINE__});          \
             }                                                                                                          \
         } while (false)
 
     #define NXT_ASSERT_MSG(expression, message)                                                                        \
         do {                                                                                                           \
             if (!(expression)) {                                                                                       \
-                ::nxt::diag::reportAssertFailure({#expression, message, __FILE__, __func__, __LINE__});                \
+                ::nxt::core::diag::reportAssertFailure({#expression, message, __FILE__, __func__, __LINE__});          \
             }                                                                                                          \
         } while (false)
 
     #define NXT_VERIFY(expression)                                                                                     \
         do {                                                                                                           \
             if (!(expression)) {                                                                                       \
-                ::nxt::diag::reportAssertFailure({#expression, nullptr, __FILE__, __func__, __LINE__});                \
+                ::nxt::core::diag::reportAssertFailure({#expression, nullptr, __FILE__, __func__, __LINE__});          \
             }                                                                                                          \
         } while (false)
 
     #define NXT_VERIFY_MSG(expression, message)                                                                        \
         do {                                                                                                           \
             if (!(expression)) {                                                                                       \
-                ::nxt::diag::reportAssertFailure({#expression, message, __FILE__, __func__, __LINE__});                \
+                ::nxt::core::diag::reportAssertFailure({#expression, message, __FILE__, __func__, __LINE__});          \
             }                                                                                                          \
         } while (false)
 

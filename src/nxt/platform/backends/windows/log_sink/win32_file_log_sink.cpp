@@ -16,7 +16,7 @@
 
 namespace nxt::platform::windows::log {
 
-using namespace nxt::log;
+using namespace nxt::core::log;
 
 namespace {
 

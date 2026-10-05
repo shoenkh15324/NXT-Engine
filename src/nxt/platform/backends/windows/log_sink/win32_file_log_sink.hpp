@@ -13,7 +13,7 @@
 
 namespace nxt::platform::windows::log {
 
-using namespace nxt::log;
+using namespace nxt::core::log;
 
 /**
  * @brief 파일 Sink의 버퍼링 정책을 나타낸다.

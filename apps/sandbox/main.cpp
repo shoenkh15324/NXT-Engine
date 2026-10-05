@@ -38,11 +38,11 @@ int main() {
     nxt::platform::windows::log::Win32FileLogSink fileSink(
         nxt::platform::windows::log::Win32FileLogSink::defaultPath());
 
-    nxt::log::LogSink* sinks[] = {&consoleSink, &fileSink};
-    nxt::log::LogManager manager(sinks);
+    nxt::core::log::LogSink* sinks[] = {&consoleSink, &fileSink};
+    nxt::core::log::LogManager manager(sinks);
 
-    nxt::log::setLogManager(manager);
-    manager.setLevel(nxt::log::LogLevel::Trace);
+    nxt::core::log::setLogManager(manager);
+    manager.setLevel(nxt::core::log::LogLevel::Trace);
 
     NXT_LOG_INFO(Engine, "Initializing NXT Engine");
     NXT_LOG_INFO(Core, "log file : {}", fileSink.defaultPath().string());

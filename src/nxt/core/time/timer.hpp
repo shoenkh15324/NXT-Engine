@@ -3,7 +3,7 @@
 #include <cstdint>
 #include <nxt/core/time/time.hpp>
 
-namespace nxt::time {
+namespace nxt::core::time {
 
 /**
  * @brief 구간 시간을 재는 값 타입이다.
@@ -96,4 +96,4 @@ private:
     bool running_{true};
 };
 
-} // namespace nxt::time
+} // namespace nxt::core::time

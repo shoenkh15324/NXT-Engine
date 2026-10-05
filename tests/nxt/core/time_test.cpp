@@ -5,11 +5,11 @@
 
 namespace {
 
-using nxt::time::Duration;
-using nxt::time::kNsPerMs;
-using nxt::time::kNsPerUs;
-using nxt::time::now;
-using nxt::time::Timestamp;
+using nxt::core::time::Duration;
+using nxt::core::time::kNsPerMs;
+using nxt::core::time::kNsPerUs;
+using nxt::core::time::now;
+using nxt::core::time::Timestamp;
 
 } // namespace
 

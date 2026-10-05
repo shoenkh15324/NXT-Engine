@@ -5,7 +5,7 @@
 #include <cstdint>
 #include <nxt/core/diagnostics/assert.hpp>
 
-namespace nxt::time {
+namespace nxt::core::time {
 
 /// @brief nanosecond 단위 변환에 쓰이는 nanosecond 개수다.
 inline constexpr std::uint64_t kNsPerUs = 1000u;
@@ -102,4 +102,4 @@ inline Timestamp now() noexcept {
     return Timestamp{static_cast<std::uint64_t>(ticks.count())};
 }
 
-} // namespace nxt::time
+} // namespace nxt::core::time

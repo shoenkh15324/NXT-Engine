@@ -5,9 +5,9 @@
 
 namespace {
 
-using nxt::log::LogCategory;
-using nxt::log::LogLevel;
-using nxt::log::LogRecord;
+using nxt::core::log::LogCategory;
+using nxt::core::log::LogLevel;
+using nxt::core::log::LogRecord;
 using nxt::platform::windows::log::LogColor;
 using nxt::platform::windows::log::Win32ConsoleLogSink;
 

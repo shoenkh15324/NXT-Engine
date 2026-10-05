@@ -5,7 +5,7 @@
 #include <nxt/core/handle/handle.hpp>
 #include <vector>
 
-namespace nxt::handle {
+namespace nxt::core::handle {
 
 /**
  * @brief 슬롯별 세대와 free list를 소유한다.
@@ -115,4 +115,4 @@ private:
     std::uint32_t freeHead_{kInvalidIndex};
 };
 
-} // namespace nxt::handle
+} // namespace nxt::core::handle
