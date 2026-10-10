@@ -101,18 +101,34 @@ src/nxt/graphics/
 - Vulkan 헤더(`vulkan/vulkan.hpp`)는 `backends/vulkan/`만 include한다.
   전역 include 경로에 Vulkan을 노출하지 않는다.
 
-## 6. 동적 로딩
+## 6. Vulkan 로딩
 
-Vulkan SDK를 설치하지 않은 환경에서도 바이너리가 실행되어야 한다.
-**정적 링크하지 않고 런타임에 `vulkan-1.dll`을 로드한다.**
+Vulkan SDK를 `find_package(Vulkan)`로 찾고 `Vulkan::Vulkan`으로 링크한다.
 
-- `VULKAN_HPP_DEFAULT_DISPATCHER` / 동적 dispatcher를 쓴다.
-- 로더는 `backends/vulkan/vulkan_loader.{hpp,cpp}` 한 곳에 둔다.
-- 라이브러리를 못 찾으면 명확한 오류 메시지를 남기고 종료한다.
+```cmake
+find_package(Vulkan REQUIRED)
+target_link_libraries(nxt_graphics PUBLIC Vulkan::Vulkan)
+```
 
-이유는 단순하다. 정적 링크하면 Vulkan 런타임이 없는 시스템에서 프로그램이 아예
-시작되지 않는다. 개발 중에 그 experiencing하는 것은 이 Phase의 목표(삼각형)를
-방해한다.
+`find_package`가 include 경로, 로더 라이브러리(`vulkan-1.lib`), glslang 경로를 모두 준다.
+Vulkan 런타임 자체는 OS가 `vulkan-1.dll`을 제공한다.
+
+**Vulkan-Hpp의 동적 디스패처를 쓴다.** 값을 하드코딩하지 않고 런타임에 물어보는
+함수 호출은 Vulkan-Hpp가 이미 처리한다. 이를 위해 `Vulkan::Vulkan` 링크와 함께
+`VULKAN_HPP_DEFAULT_DISPATCHER`를 초기화한다. 라이브러리가 바뀔 때 이를 다시
+맞출 이유가 없다.
+
+이전 문서에서 "직접 `LoadLibrary`로 `vulkan-1.dll`을 로드한다"고 했으나 철회한다.
+논거는 "Vulkan 런타임이 없는 시스템에서 프로그램이 시작되지 않는다"였는데,
+Windows 10+에서는 `vulkan-1.dll`이 system32에 있고 GPU 드라이버와 함께 설치된다.
+**고려할 시나리오가 아니다.** 로더를 직접 작성하면 같은 일을 두 번 하게 된다.
+
+단, include 경로는 `SYSTEM`으로 지정해야 한다. `Vulkan::Vulkan`은 include 디렉터리를
+SYSTEM으로 표시하지 않아서, 그대로 쓰면 Vulkan 헤더의 경고가 `/W4` 빌드를 오염시킨다.
+
+```cmake
+target_include_directories(nxt_graphics SYSTEM PUBLIC "${Vulkan_INCLUDE_DIR}")
+```
 
 ## 7. 에러 처리
 
@@ -205,9 +221,10 @@ RHI는 render pass를 **기술자(descriptor)**로 받는다. 무엇을 그리�
 1. RHI는 GPU를 다루되 무엇을 그릴지는 알지 않는다.
 2. `vk::`는 `backends/vulkan/` 밖에서 나타나지 않는다.
 3. Vulkan 헤더는 전역 include 경로에 노출하지 않는다.
-4. Vulkan 런타임은 정적 링크가 아니라 동적 로드한다.
-5. 추상화는 지금 필요한 것만 한다. IR은 필요해질 때 넣는다.
-6. 모든 GPU 오류는 검증 레이어를 포함해 로깅으로 보고한다.
-7. GPU 메모리는 `nxt_graphics::rhi::Memory`가 만든다. `SystemAllocator`는 CPU 전용이다.
-8. GPU 리소스는 fence 대기 없이 파괴하지 않는다.
-9. 한 백엔드라도 경계는 유지한다. 지금의 대가로 얻는 것은 검증 가능성과 도구 호환성이다.
+4. Vulkan은 `find_package(Vulkan)` + `Vulkan::Vulkan`으로 연결한다. 로드를 직접 작성하지 않는다.
+5. Vulkan 헤더의 include 경로는 `SYSTEM`으로 지정한다.
+6. 추상화는 지금 필요한 것만 한다. IR은 필요해질 때 넣는다.
+7. 모든 GPU 오류는 검증 레이어를 포함해 로깅으로 보고한다.
+8. GPU 메모리는 `nxt_graphics::rhi::Memory`가 만든다. `SystemAllocator`는 CPU 전용이다.
+9. GPU 리소스는 fence 대기 없이 파괴하지 않는다.
+10. 한 백엔드라도 경계는 유지한다. 지금의 대가로 얻는 것은 검증 가능성과 도구 호환성이다.

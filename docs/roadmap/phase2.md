@@ -76,6 +76,21 @@ refcounting을 넣을 시점은 **같은 리소스를 서로 다른 씬이 공�
 
 ### 3.1 `nxt_assets` (신규 모듈)
 
+코드 모듈의 이름은 `assets`로 두지만, 루트의 콘텐츠 디렉터리와 구분한다.
+
+```text
+content/              게임 콘텐츠 — glTF · 텍스처. 프로그램이 읽는 데이터
+shaders/              셰이더 소스 — 빌드 시 컴파일되어 SPIR-V가 된다
+src/nxt/assets/       nxt_assets — 위 데이터를 읽어 CPU 측 구조로 만드는 코드
+```
+
+`content/`와 `shaders/`는 성격이 다르므로 합치지 않는다.
+
+```text
+shaders/   빌드 입력.  소스에서 생성된 산출물이 된다
+content/   런타임 데이터.  그대로 배포된다
+```
+
 ```text
 src/nxt/assets/
     asset_type.hpp
@@ -96,8 +111,11 @@ src/nxt/assets/
 - `AssetManager`는 읽기 요청을 받아 job으로 던지고 완료를 알린다.
   **로딩은 절대 렌더링 스레드에서 동기으로 하지 않는다.**
 
-`assets`는 `platform`(파일 읽기)과 `graphics`(GPU 업로드)에 의존한다.
-두 하위 계층에 의존하는 모듈이므로, 하위 모듈이 `assets`를 알면 안 된다.
+`assets`는 `platform`(파일 읽기)에만 의존한다. **`nxt_graphics`에는 의존하지 않는다.**
+
+GPU 리소스는 `nxt_renderer/world`가 만든다. `assets`는 CPU 측 파싱 결과까지만
+만들고 넘긴다. 로더가 GPU 리소스를 만들도록 허용하면 CPU/세계와 GPU/세계의 경계가
+흐려지고, [`../design/scene_world.md`](../design/scene_world.md) §7의 결정과 어긋난다.
 
 ### 3.1.1 glTF 파서 — cgltf
 

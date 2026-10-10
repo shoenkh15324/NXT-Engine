@@ -10,15 +10,15 @@
 
 | 단계 | 상태 |
 |---|---|
-| **A1 환경** | 🔴 **착수 블로커.** Vulkan SDK 없음 — 헤더도 셰이더 컴파일러도 없다 |
-| **A2 스켈레톤 배선** | 🔴 미착수. 4개 모듈 CMakeLists가 0바이트 |
+| **A1 환경** | 🟢 완료. SDK 1.4.363.0 설치, `find_package(Vulkan)` 동작 확인 |
+| **A2 스켈레톤 배선** | 🟢 완료. Vulkan 소스 0개로 target 7개 생성, 빌드·테스트 통과 |
 | **A3 창** | 🔴 `win32_window.*` 0바이트, `window.hpp`는 주석만 |
-| **A4 RHI 스파인** | 🔴 전부 없음. `rhi/rhi.hpp` 63바이트 주석 |
+| **A4 RHI 스파인** | 🔴 전부 없음. `nxt_graphics`는 지금 INTERFACE, A4에서 STATIC으로 전환 |
 | **A5 프레임 루프** | 🔴 `engine/frame_loop.*` 0바이트 |
 | **B 삼각형** | 🔴 미착수 |
 | **C 계층 배선** | 🔴 미착수 |
 
-Vulkan 런타임은 준비돼 있다 (RTX 4060, API 1.4.351). SDK만 없다.
+Vulkan 런타임은 준비돼 있다 (RTX 4060, API 1.4.351).
 
 ### 이미 되어 있어 재사용되는 것
 
@@ -65,18 +65,41 @@ Instance → Surface → Device → Memory → Swapchain → CommandBuffer → p
 
 ## A1. 환경
 
-- [ ] Vulkan SDK 설치 (glslang 포함)
-- [ ] `find_package(Vulkan REQUIRED)` 연결
-- [ ] SDK 샘플로 GPU 초기화 1회 확인
+- [x] Vulkan SDK 설치 — 1.4.363.0
+- [x] `find_package(Vulkan REQUIRED)` 연결
+- [x] include · `vulkan-1.lib` · glslang 경로 탐지 확인
+- [ ] GPU 초기화 1회 확인 — SDK 샘플로
 
 ## A2. 스켈레톤 배선 (C++ 코드 없음)
 
-- [ ] `src/nxt/CMakeLists.txt`에 `math` `graphics` `renderer` `engine` `assets` 등록
-- [ ] `graphics/` `renderer/` `engine/` `assets/` CMakeLists 작성 — **지금 0바이트이라 걸어도 target이 안 생긴다**
-- [ ] `platform/CMakeLists.txt:4-6` — `.hpp`를 `add_library` 소스에서 빼고 `FILE_SET HEADERS`로
-- [ ] `platform/backends/windows/CMakeLists.txt` — `win32_window.hpp`를 `PUBLIC`에서 빼라
-- [ ] `apps/sandbox/CMakeLists.txt` — `nxt_core` 명시적 링크 (현재 transitive에 의존)
-- [ ] **검증: Vulkan 코드 없이 빌드가 통과한다**
+- [x] `src/nxt/CMakeLists.txt`에 모듈 7개 등록
+- [x] `src/nxt/math/` 생성 — `nxt_math` INTERFACE 타깃
+- [x] `graphics` `renderer` `engine` `assets` CMakeLists 작성
+- [x] `graphics/backends/vulkan/CMakeLists.txt` 작성
+- [x] `platform/CMakeLists.txt` — `.hpp`를 `add_library` 소스에서 빼고 `FILE_SET`으로
+- [x] `platform/backends/windows` — `win32_window.hpp`를 공개 계약에서 제외
+- [x] `platform/backends` — `if(WIN32)` 가드
+- [x] `apps/sandbox` — `nxt_core` 명시적 링크
+- [x] 죽은 placeholder CMakeLists 13개 삭제
+- [x] `cmake/CompileShaders.cmake` 추가
+- [x] **검증: Vulkan 소스 없이 target 7개 생성, 빌드 통과, 테스트 2개 통과**
+
+생성된 타깃:
+
+```text
+nxt_core  nxt_math  nxt_platform  nxt_renderer  nxt_engine  nxt_assets  sandbox
+```
+
+`nxt_graphics`는 소스가 아직 없어서 INTERFACE다. A4에서 첫 `.cpp`가 생기면 STATIC으로 전환한다.
+
+### CMake 규칙
+
+```text
+모듈당 CMakeLists 하나에 모든 헤더를 FILE_SET으로 등록한다.
+백엔드만 예외로 backends/<os>/가 자체 CMakeLists를 가진다.
+FILE_SET 이름이 다르면 TYPE HEADERS를 명시하고 소문자로 쓴다.
+공개 헤더는 FILE_SET HEADERS, 비공개는 별도 이름으로 PRIVATE.
+```
 
 ## A3. 창
 
@@ -112,11 +135,14 @@ platform은 `HWND`까지만 준다. `VkSurfaceKHR`를 만드는 일은 graphics�
 백엔드 구현 (`src/nxt/graphics/backends/vulkan/`)
 
 - [ ] `vulkan_types.hpp` — vk:: 타입이 존재하는 유일한 파일
-- [ ] `vulkan_loader.{hpp,cpp}` — `vulkan-1.dll` 동적 로드
 - [ ] `vulkan_check.hpp` — `VK_CHECK`
-- [ ] `vulkan_memory.cpp` · `vulkan_instance.cpp` · `vulkan_device.cpp`
+- [ ] `vulkan_instance.cpp` · `vulkan_device.cpp` · `vulkan_memory.cpp`
 - [ ] `vulkan_swapchain.cpp` · `vulkan_command_buffer.cpp` · `vulkan_fence.cpp`
 - [ ] `vulkan_resource_deletion.cpp`
+
+`vulkan_loader`를 직접 작성하지 않는다. `find_package(Vulkan)`이 준 `Vulkan::Vulkan`을
+링크하고 Vulkan-Hpp의 동적 디스패처를 쓴다. 근거는
+[`../design/rhi.md` §6](../design/rhi.md) — 이전 문서의 "직접 로드"는 철회했다.
 
 **`memory.hpp`가 별도 계층인 이유.** `SystemAllocator`로 대체되지 않는다.
 
@@ -168,7 +194,8 @@ destroy()는 지연 목록에 넣고, 그 리소스를 마지막으로 쓴 프�
 ## B2. 셰이더
 
 - [ ] `shaders/triangle.vert` · `triangle.frag`
-- [ ] CMake 셰이더 컴파일 규칙 (GLSL → SPIR-V)
+- [x] CMake 셰이더 컴파일 규칙 — `cmake/CompileShaders.cmake`
+- [ ] `nxt_add_shader`로 SPIR-V 등록
 - [ ] `graphics/rhi/shader.hpp` + `vulkan_shader.cpp`
 
 ## B3. 파이프라인
@@ -239,9 +266,9 @@ depth는 어차피 Phase 3에 존재한다. 그때 넣으면 Phase 0의 렌더 �
 
 ## 착수 시 결정할 것
 
-| 질문 | 기본값 |
-|---|---|
-| `graphics/runtime/` 생존 여부 | 삭제하고 `rhi/`로 통합 |
-| namespace 규칙 | flat한 디렉터리는 이름 반복 안 함 |
-| graphics 테스트 | Phase 0는 없음 |
-| instance 확장 | `VK_EXT_debug_utils`만 |
+| 질문 | 기본값 | 상태 |
+|---|---|---|
+| `graphics/runtime/` 생존 여부 | 삭제하고 `rhi/`로 통합 | 미결. placeholder CMakeLists는 A2에서 삭제함 |
+| namespace 규칙 | flat한 디렉터리는 이름 반복 안 함 (`nxt::math`) | 미결 |
+| graphics 테스트 | Phase 0는 없음 | 미결 |
+| instance 확장 | `VK_EXT_debug_utils`만 | 미결 |

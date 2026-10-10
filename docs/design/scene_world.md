@@ -200,6 +200,9 @@ SharedAssetManager   앱 전체 수명 — 공용 머티리얼, UI 폰트
 LocalAssetManager    부모 씬 수명 — 레벨 메시, 레벨 텍스처
 ```
 
+`nxt_assets`는 루트의 `content/` 디렉터리에서 읽는다. `content/`(데이터)와
+`src/nxt/assets/`(코드)는 이름만 같을 뿐 다른 것이다.
+
 ### refcounting은 넣지 않는다
 
 Phase 2는 **매니저 소유 + 명시적 `unload()`** 다.
