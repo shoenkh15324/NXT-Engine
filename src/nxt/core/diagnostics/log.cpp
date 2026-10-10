@@ -52,6 +52,15 @@ void LogManager::setLevel(const LogLevel level) noexcept {
     level_ = level;
 }
 
+LogLevel LogManager::defaultLevel() noexcept {
+#if defined(NDEBUG)
+    // Release: 진단용 로그를 남기면 배포본이 조용해야 한다.
+    return LogLevel::Error;
+#else
+    return LogLevel::Debug;
+#endif
+}
+
 LogLevel LogManager::level() const noexcept {
     std::scoped_lock lock(mutex_);
     return level_;
@@ -59,18 +68,18 @@ LogLevel LogManager::level() const noexcept {
 
 void LogManager::setCategoryLevel(const LogCategory category, const LogLevel level) noexcept {
     std::scoped_lock lock(mutex_);
-    categoryLevels_[static_cast<std::size_t>(category)] = level;
+    categoryLevels_[static_cast<std::size_t>(category.subsystem)] = level;
 }
 
 void LogManager::resetCategoryLevel(const LogCategory category) noexcept {
     std::scoped_lock lock(mutex_);
-    categoryLevels_[static_cast<std::size_t>(category)].reset();
+    categoryLevels_[static_cast<std::size_t>(category.subsystem)].reset();
 }
 
 LogLevel LogManager::categoryLevel(const LogCategory category) const noexcept {
     std::scoped_lock lock(mutex_);
 
-    const auto categoryIndex = static_cast<std::size_t>(category);
+    const auto categoryIndex = static_cast<std::size_t>(category.subsystem);
     const auto& categoryLevel = categoryLevels_[categoryIndex];
 
     if (categoryLevel.has_value()) {
@@ -81,7 +90,7 @@ LogLevel LogManager::categoryLevel(const LogCategory category) const noexcept {
 }
 
 bool LogManager::shouldLog(const LogLevel level, const LogCategory category) const noexcept {
-    const auto categoryIndex = static_cast<std::size_t>(category);
+    const auto categoryIndex = static_cast<std::size_t>(category.subsystem);
     const auto categoryLevel = categoryLevels_[categoryIndex];
     const auto effectiveLevel = categoryLevel.value_or(level_);
     return level >= effectiveLevel;
@@ -121,22 +130,91 @@ std::string_view toString(const LogLevel level) noexcept {
     return "UNKNOWN";
 }
 
-std::string_view toString(const LogCategory category) noexcept {
-    switch (category) {
-        case LogCategory::Core:
+std::string_view toString(const LogLayer layer) noexcept {
+    switch (layer) {
+        case LogLayer::Core:
             return "Core";
-        case LogCategory::Platform:
+        case LogLayer::Platform:
             return "Platform";
-        case LogCategory::Renderer:
-            return "Renderer";
-        case LogCategory::Graphics:
+        case LogLayer::Graphics:
             return "Graphics";
-        case LogCategory::Assets:
+        case LogLayer::Renderer:
+            return "Renderer";
+        case LogLayer::Assets:
             return "Assets";
-        case LogCategory::Engine:
+        case LogLayer::Engine:
             return "Engine";
     }
     return "Unknown";
+}
+
+std::string_view toString(const LogSubsystem subsystem) noexcept {
+    switch (subsystem) {
+        case LogSubsystem::None:
+            return "";
+        case LogSubsystem::Diagnostics:
+            return "Diagnostics";
+        case LogSubsystem::Handle:
+            return "Handle";
+        case LogSubsystem::Time:
+            return "Time";
+        case LogSubsystem::Memory:
+            return "Memory";
+        case LogSubsystem::Containers:
+            return "Containers";
+        case LogSubsystem::Concurrency:
+            return "Concurrency";
+        case LogSubsystem::Jobs:
+            return "Jobs";
+        case LogSubsystem::Event:
+            return "Event";
+        case LogSubsystem::Window:
+            return "Window";
+        case LogSubsystem::Input:
+            return "Input";
+        case LogSubsystem::Filesystem:
+            return "Filesystem";
+        case LogSubsystem::Win32:
+            return "Win32";
+        case LogSubsystem::Rhi:
+            return "Rhi";
+        case LogSubsystem::Vulkan:
+            return "Vulkan";
+        case LogSubsystem::Graph:
+            return "Graph";
+        case LogSubsystem::Material:
+            return "Material";
+        case LogSubsystem::Mesh:
+            return "Mesh";
+        case LogSubsystem::Passes:
+            return "Passes";
+        case LogSubsystem::World:
+            return "World";
+        case LogSubsystem::Types:
+            return "Types";
+        case LogSubsystem::Loaders:
+            return "Loaders";
+        case LogSubsystem::FrameLoop:
+            return "FrameLoop";
+        case LogSubsystem::Scene:
+            return "Scene";
+        case LogSubsystem::LogSubsystemCount:
+            break;
+    }
+    return "Unknown";
+}
+
+void appendCategoryGroups(std::string& out, const LogCategory category) {
+    out += '[';
+    out += toString(category.layer);
+    out += ']';
+
+    // 하위 시스템이 없을 수 있다. 모듈 루트 파일(engine.cpp 등)이 그 경우다.
+    if (category.subsystem != LogSubsystem::None) {
+        out += '[';
+        out += toString(category.subsystem);
+        out += ']';
+    }
 }
 
 } // namespace nxt::core::log

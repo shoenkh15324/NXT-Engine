@@ -54,18 +54,78 @@ level >= effectiveLevel
 
 ## 4. LogCategory
 
+카테고리는 **계층**과 **하위 시스템** 두 축으로 이루어진다.
+
 ```cpp
-enum class LogCategory : std::uint8_t { Core, Platform, Renderer, Graphics, Assets, Engine, LogCategoryCount };
+enum class LogLayer : std::uint8_t { Core, Platform, Graphics, Renderer, Assets, Engine };
+
+enum class LogSubsystem : std::uint8_t {
+    None,        // 하위 디렉터리가 없는 모듈 루트 파일
+    Diagnostics, Handle, Time, Memory, Containers, Concurrency, Jobs, Event,   // core
+    Window, Input, Filesystem, Win32,                                         // platform
+    Rhi, Vulkan,                                                              // graphics
+    Graph, Material, Mesh, Passes, World,                                     // renderer
+    Types, Loaders,                                                           // assets
+    FrameLoop, Scene,                                                         // engine
+    LogSubsystemCount
+};
+
+struct LogCategory {
+    LogLayer layer{LogLayer::Core};
+    LogSubsystem subsystem{LogSubsystem::None};
+    auto operator<=>(const LogCategory&) const noexcept = default;
+};
 ```
+
+Layer는 `src/nxt` 아래의 최상위 디렉터리에, Subsystem은 모듈 바로 아래의
+디렉터리에 대응한다. 백엔드도 하위 시스템 하나로 본다(`platform/backends/windows`
+→ `Win32`, `graphics/backends/vulkan` → `Vulkan`).
+
+Subsystem 이름은 계층 간에 겹치지 않는다. 그래서 카테고리별 level override
+배열은 Subsystem 값만으로 색인해도 정확하다.
 
 Category와 Level은 서로 독립이다. Category는 어디서, Level은 얼마나 심각한가.
 
-## 5. Global Level + Category Override
+### 표시 형태
 
-기본값은 `LogLevel::Info`다. 카테고리는 override를 선택적으로 지정할 수 있다.
+두 축이 각각 독립된 대괄호 그룹이 된다.
+
+```text
+Platform / Win32   →  [Platform][Win32]
+Engine  / None     →  [Engine]
+```
+
+하위 시스템이 없는 모듈 루트 파일(`engine/engine.cpp`, `renderer/renderer.cpp`,
+앱 `main.cpp`)은 `None`을 쓴다.
+
+### 매크로
+
+호출부는 두 개의 이름만 준다. 구조체 조립은 매크로가 끝낸다.
 
 ```cpp
-std::array<std::optional<LogLevel>, static_cast<std::size_t>(LogCategory::LogCategoryCount)> categoryLevels_;
+NXT_LOG_ERROR(Platform, Win32, "CreateWindowExW failed, error={}", error);
+NXT_LOG_INFO(Engine, None, "Initializing NXT Engine");
+```
+
+## 5. Global Level + Category Override
+
+기본값은 빌드 설정이 정한다. `LogManager::defaultLevel()`이 이를 담당한다.
+
+```text
+Debug    →  LogLevel::Debug
+Release  →  LogLevel::Error
+```
+
+`NDEBUG`로 구분하며, `assert.hpp`와 같은 기준을 쓴다. 두 기준이 갈라지면
+"이 로그는 왜 안 보이나"를 설명하기 어려워진다.
+
+호출자가 `setLevel()`을 호출하면 이 값을 덮어쓴다. 배포 이진리는 조용해야 하므로
+애플리케이션이 명시적으로 레벨을 올리지 않는 한 Release에서는 Error와 Fatal만 남는다.
+
+카테고리는 override를 선택적으로 지정할 수 있다.
+
+```cpp
+std::array<std::optional<LogLevel>, static_cast<std::size_t>(LogSubsystem::LogSubsystemCount)> categoryLevels_;
 ```
 
 override가 있으면 그 값을, 없으면 global을 쓴다.
@@ -73,12 +133,10 @@ override가 있으면 그 값을, 없으면 global을 쓴다.
 ```text
 Global = Info, Renderer = Debug
 
-Core      → Info
-Platform  → Info
-Renderer  → Debug
-Graphics  → Info
-Assets    → Info
-Engine    → Info
+Core              → Info
+Platform          → Info
+Platform/Win32    → Debug
+Renderer          → Info
 ```
 
 API:
@@ -255,7 +313,7 @@ exception propagation을 하지 않는다는 것이다.
 메시지는 `std::format`으로 포맷한다. 매크로는 variadic다.
 
 ```cpp
-NXT_LOG_INFO(Engine, "initialized in {} ms", elapsedMs);
+NXT_LOG_INFO(Engine, FrameLoop, "initialized in {} ms", elapsedMs);
 ```
 
 형식 지정자가 잘못되면 컴파일 시점에 오류가 난다. 런타임에 실패하지 않는다.
@@ -268,7 +326,7 @@ NXT_LOG_INFO(Engine, "initialized in {} ms", elapsedMs);
 호출자가 이미 메시지를 생성한 뒤 `LogManager`가 filtering한다.
 
 ```cpp
-NXT_LOG_DEBUG(Core, createExpensiveMessage());
+NXT_LOG_DEBUG(Core, Diagnostics, createExpensiveMessage());
 ```
 
 Debug가 비활성화되어 있어도 `createExpensiveMessage()`는 호출될 수 있다.
@@ -290,8 +348,20 @@ Atomic ordering은 필요한 최소 수준을 쓴다.
 ## 22. String Conversion
 
 ```cpp
-std::string_view toString(LogLevel level) noexcept;
-std::string_view toString(LogCategory category) noexcept;
+std::string_view toString(LogLayer layer) noexcept;
+std::string_view toString(LogSubsystem subsystem) noexcept;
+void appendCategoryGroups(std::string& out, LogCategory category);
+```
+
+`toString`은 각 축의 이름만 반환한다. 대괄호 조립은 `appendCategoryGroups`가
+한다. 두 시크가 같은 형식을 쓰므로 한 곳에 두는 편이 낫다.
+
+```text
+toString(LogLayer::Platform)              →  "Platform"
+toString(LogSubsystem::Win32)             →  "Win32"
+toString(LogSubsystem::None)              →  ""
+appendCategoryGroups(Platform/Win32)     →  "[Platform][Win32]"
+appendCategoryGroups(Engine/None)        →  "[Engine]"
 ```
 
 ## 23. Global Logging Frontend
@@ -299,20 +369,26 @@ std::string_view toString(LogCategory category) noexcept;
 사용자는 `LogManager::write()`를 직접 호출하지 않고 매크로를 쓴다.
 
 ```cpp
-NXT_LOG_TRACE(category, ...)
-NXT_LOG_DEBUG(category, ...)
-NXT_LOG_INFO(category, ...)
-NXT_LOG_WARN(category, ...)
-NXT_LOG_ERROR(category, ...)
-NXT_LOG_FATAL(category, ...)
+NXT_LOG_TRACE(layer, subsystem, ...)
+NXT_LOG_DEBUG(layer, subsystem, ...)
+NXT_LOG_INFO(layer, subsystem, ...)
+NXT_LOG_WARN(layer, subsystem, ...)
+NXT_LOG_ERROR(layer, subsystem, ...)
+NXT_LOG_FATAL(layer, subsystem, ...)
 ```
 
-`category` 인자는 열거값 이름만 받는다. 매크로가 `LogCategory::`를 붙이므로
-`LogCategory::Engine`처럼 쓰면 중복된다.
+`layer`와 `subsystem` 인자는 열거값 이름만 받는다. 매크로가 `LogLayer::`와
+`LogSubsystem::`을 붙이므로 접두사를 함께 쓰면 중복된다.
 
 ```cpp
-NXT_LOG_INFO(Engine, "Engine initialized");     // 맞다
-NXT_LOG_INFO(LogCategory::Engine, "...");      // 중복으로 실패한다
+NXT_LOG_INFO(Platform, Window, "...");              // 맞다
+NXT_LOG_INFO(LogLayer::Platform, Window, "...");     // 중복으로 실패한다
+```
+
+하위 시스템이 없는 모듈 루트 파일은 `None`을 명시한다.
+
+```cpp
+NXT_LOG_INFO(Engine, None, "Engine initialized");
 ```
 
 ## 24. 구현 범위

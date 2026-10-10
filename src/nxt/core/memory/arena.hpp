@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <nxt/core/diagnostics/assert.hpp>
+#include <nxt/core/diagnostics/log.hpp>
 #include <nxt/core/memory/allocator.hpp>
 #include <type_traits>
 
@@ -37,7 +38,9 @@ public:
         : capacity_{capacity},
           base_{capacity == 0 ? nullptr
                               : static_cast<std::byte*>(SystemAllocator{}.allocate(capacity, kDefaultAlignment))},
-          offset_{0} {}
+          offset_{0} {
+        NXT_LOG_DEBUG(Core, Memory, "arena created: capacity={} bytes", capacity);
+    }
 
     ~Arena() {
         SystemAllocator{}.deallocate(base_);
@@ -83,6 +86,7 @@ public:
         NXT_ASSERT_MSG(alignment <= kDefaultAlignment, "alignment exceeds arena block alignment");
 
         if ((alignment == 0) || (base_ == nullptr)) {
+            NXT_LOG_TRACE(Core, Memory, "arena rejected: empty arena or alignment={}", alignment);
             return nullptr;
         }
 
@@ -90,10 +94,13 @@ public:
         // offset_보다 작아지므로 그 조건으로 잡아낸다.
         const std::size_t alignedOffset = ((offset_ + (alignment - 1)) & ~(alignment - 1));
         if ((alignedOffset < offset_) || (alignedOffset > capacity_)) {
+            NXT_LOG_TRACE(Core, Memory, "arena rejected: alignment {} overflows capacity {}", alignment, capacity_);
             return nullptr;
         }
 
         if (size > (capacity_ - alignedOffset)) {
+            NXT_LOG_TRACE(Core, Memory, "arena exhausted: request={} remaining={} capacity={}", size,
+                          capacity_ - alignedOffset, capacity_);
             return nullptr;
         }
 
@@ -117,6 +124,7 @@ public:
      * 소멸 책임이 없는 데이터에만 쓴다.
      */
     void reset() noexcept {
+        NXT_LOG_DEBUG(Core, Memory, "arena reset: released {} of {} bytes", offset_, capacity_);
         offset_ = 0;
     }
 

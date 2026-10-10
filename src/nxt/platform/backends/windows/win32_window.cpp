@@ -43,7 +43,7 @@ std::wstring toWideString(std::string_view text) {
 
     const int length = ::MultiByteToWideChar(CP_UTF8, 0, text.data(), static_cast<int>(text.size()), nullptr, 0);
     if (length <= 0) {
-        NXT_LOG_WARN(Platform, "window title conversion failed, error={}", ::GetLastError());
+        NXT_LOG_WARN(Platform, Win32, "window title conversion failed, error={}", ::GetLastError());
         return {};
     }
 
@@ -61,9 +61,10 @@ std::wstring toWideString(std::string_view text) {
  */
 void enablePerMonitorDpiAwareness() {
     if (::SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2) != FALSE) {
+        NXT_LOG_DEBUG(Platform, Win32, "per-monitor DPI awareness V2 enabled");
         return;
     }
-    NXT_LOG_WARN(Platform, "per-monitor DPI awareness unavailable, falling back to system aware");
+    NXT_LOG_WARN(Platform, Win32, "per-monitor DPI awareness unavailable, falling back to system aware");
     ::SetProcessDPIAware();
 }
 
@@ -88,6 +89,7 @@ bool registerWindowClass() {
         windowClass.lpszClassName = kWindowClassName;
 
         if (::RegisterClassExW(&windowClass) != 0) {
+            NXT_LOG_DEBUG(Platform, Win32, "window class registered");
             return true;
         }
 
@@ -96,7 +98,7 @@ bool registerWindowClass() {
             return true;
         }
 
-        NXT_LOG_ERROR(Platform, "RegisterClassExW failed, error={}", error);
+        NXT_LOG_ERROR(Platform, Win32, "RegisterClassExW failed, error={}", error);
         return false;
     }();
 
@@ -127,7 +129,7 @@ HWND createNativeWindow(const WindowDesc& desc) {
     // 드로잉 영역 크기는 DPI와 무관하므로 swapchain에는 영향이 없다.
     RECT adjusted{0, 0, static_cast<LONG>(desc.width), static_cast<LONG>(desc.height)};
     if (::AdjustWindowRectEx(&adjusted, WS_OVERLAPPEDWINDOW, FALSE, 0) == FALSE) {
-        NXT_LOG_ERROR(Platform, "AdjustWindowRectEx failed, error={}", ::GetLastError());
+        NXT_LOG_ERROR(Platform, Win32, "AdjustWindowRectEx failed, error={}", ::GetLastError());
         return nullptr;
     }
 
@@ -136,7 +138,7 @@ HWND createNativeWindow(const WindowDesc& desc) {
                                   adjusted.right - adjusted.left, adjusted.bottom - adjusted.top, nullptr, nullptr,
                                   ::GetModuleHandleW(nullptr), nullptr);
     if (hwnd == nullptr) {
-        NXT_LOG_ERROR(Platform, "CreateWindowExW failed, error={}", ::GetLastError());
+        NXT_LOG_ERROR(Platform, Win32, "CreateWindowExW failed, error={}", ::GetLastError());
         return nullptr;
     }
 
@@ -161,6 +163,7 @@ Win32Window::~Win32Window() {
     // IsWindow로 확인한 뒤에만 부수적으로 다시 파괴하지 않는다.
     const auto hwnd = static_cast<HWND>(hwnd_);
     if ((hwnd != nullptr) && (::IsWindow(hwnd) != FALSE)) {
+        NXT_LOG_DEBUG(Platform, Win32, "window destroyed");
         ::DestroyWindow(hwnd);
     }
 }
@@ -191,9 +194,17 @@ void Win32Window::pollEvents() {
     // 핸들로 걸러 이 창의 메시지만 처리한다. 창이 하나뿐인 지금은 차이가
     // 없지만, 여러 개가 되면 창 하나만 닫은 채 다른 창이 멈추는 일이 생긴다.
     MSG message{};
+    int processed = 0;
     while (::PeekMessageW(&message, static_cast<HWND>(hwnd_), 0, 0, PM_REMOVE) != FALSE) {
         ::TranslateMessage(&message);
         ::DispatchMessageW(&message);
+        ++processed;
+    }
+
+    // 대부분의 프레임에는 메시지가 없다. 무조건 로그하면 조용한 프레임마다
+    // 포맷 비용만 내므로, 처리된 것이 있을 때만 남긴다.
+    if (processed > 0) {
+        NXT_LOG_TRACE(Platform, Win32, "processed {} message(s)", processed);
     }
 }
 

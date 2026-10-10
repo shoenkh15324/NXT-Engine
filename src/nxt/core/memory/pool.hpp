@@ -4,6 +4,7 @@
 #include <limits>
 #include <new>
 #include <nxt/core/diagnostics/assert.hpp>
+#include <nxt/core/diagnostics/log.hpp>
 #include <nxt/core/memory/allocator.hpp>
 #include <type_traits>
 #include <utility>
@@ -54,6 +55,9 @@ public:
         for (std::size_t i = slotCount_; i > 0; --i) {
             freeList_.push_back(base_ + (i - 1) * sizeof(T));
         }
+
+        // Pool<T>는 템플릿이라 T의 이름을 싸게 로그에 넣을 수 없다. 값만 남긴다.
+        NXT_LOG_DEBUG(Core, Memory, "pool created: slots={} bytes={}", slotCount_, slotCount_ * sizeof(T));
     }
 
     /**
@@ -163,6 +167,7 @@ private:
     [[nodiscard]]
     std::byte* popSlot() {
         if (freeList_.empty()) {
+            NXT_LOG_TRACE(Core, Memory, "pool exhausted: live={} slots={}", liveCount_, slotCount_);
             return nullptr;
         }
         std::byte* const slot = freeList_.back();

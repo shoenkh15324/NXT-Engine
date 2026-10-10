@@ -135,9 +135,9 @@ std::string Win32ConsoleLogSink::format(const LogRecord& record, const bool useC
     line += timeText;
     line += "] [";
     line += toString(record.level);
-    line += "][";
-    line += toString(record.category);
-    line += "] ";
+    line += ']';
+    appendCategoryGroups(line, record.category);
+    line += ' ';
     line += record.message;
 
     if (useColor) {

@@ -31,20 +31,77 @@ enum class LogLevel : std::uint8_t {
 };
 
 /**
- * @brief 로그 메시지를 생성한 논리적 서브시스템을 나타낸다.
+ * @brief 로그 메시지를 생성한 모듈 계층을 나타낸다.
  *
- * 카테고리는 LogLevel과 독립적으로 관리된다.
- * 카테고리는 메시지가 "어디에서" 발생했는지를 나타내고,
- * 레벨은 메시지가 "얼마나 심각한지"를 나타낸다.
+ * 계층은 src/nxt 아래의 최상위 디렉터리(src/nxt/core, src/nxt/platform 등)에
+ * 대응한다.
  */
-enum class LogCategory : std::uint8_t {
+enum class LogLayer : std::uint8_t {
     Core = 0,
     Platform,
-    Renderer,
     Graphics,
+    Renderer,
     Assets,
     Engine,
-    LogCategoryCount
+};
+
+/**
+ * @brief 모듈 바로 아래의 디렉터리를 가리킨다.
+ *
+ * None은 하위 디렉터리가 없는 모듈 루트 파일(engine/engine.cpp,
+ * renderer/renderer.cpp, 앱 main.cpp)에 쓴다.
+ *
+ * 이름은 계층 간에 겹치지 않는다. 그래서 카테고리별 level override의 배열을
+ * LogSubsystem 값만으로 색인해도 정확하다.
+ */
+enum class LogSubsystem : std::uint8_t {
+    None = 0,
+    // core
+    Diagnostics,
+    Handle,
+    Time,
+    Memory,
+    Containers,
+    Concurrency,
+    Jobs,
+    Event,
+    // platform
+    Window,
+    Input,
+    Filesystem,
+    Win32,
+    // graphics
+    Rhi,
+    Vulkan,
+    // renderer
+    Graph,
+    Material,
+    Mesh,
+    Passes,
+    World,
+    // assets
+    Types,
+    Loaders,
+    // engine
+    FrameLoop,
+    Scene,
+
+    LogSubsystemCount
+};
+
+/**
+ * @brief 로그 메시지의 출처를 나타낸다.
+ *
+ * 계층은 항상 있고 하위 시스템은 없을 수 있다. 표시할 때 각각 독립된 대괄호
+ * 그룹이 되어, 예로 Platform/None은 "[Platform]", Platform/Win32는
+ * "[Platform][Win32]"로 나온다.
+ */
+struct LogCategory {
+    LogLayer layer{LogLayer::Core};
+    LogSubsystem subsystem{LogSubsystem::None};
+
+    /// 비교는 defaulted 연산자로부터 파생된다.
+    auto operator<=>(const LogCategory&) const noexcept = default;
 };
 
 /**
@@ -140,6 +197,18 @@ public:
     void setLevel(LogLevel level) noexcept;
 
     /**
+     * @brief 빌드 설정이 정하는 기본 로그 레벨을 반환한다.
+     *
+     * Debug는 Debug 이상을 남기고, Release는 Error 이상만 남긴다. 호출자가
+     * setLevel()을 호출하지 않았을 때 이 값이 쓰인다.
+     *
+     * NDEBUG 판정은 assert.hpp와 같은 기준을 쓴다. 두 기준이 갈라지면
+     * "이 로그는 왜 안 보이나"를 설명하기 어려워진다.
+     */
+    [[nodiscard]]
+    static LogLevel defaultLevel() noexcept;
+
+    /**
      * @brief 현재 전역 최소 로그 레벨을 반환한다.
      *
      * @return 전역 최소 로그 레벨.
@@ -192,14 +261,15 @@ private:
     bool shouldLog(LogLevel level, LogCategory category) const noexcept;
 
 private:
-    using CategoryLevels = std::array<std::optional<LogLevel>, static_cast<std::size_t>(LogCategory::LogCategoryCount)>;
+    using CategoryLevels =
+        std::array<std::optional<LogLevel>, static_cast<std::size_t>(LogSubsystem::LogSubsystemCount)>;
 
     // Sink 하나로 생성된 경우를 위한 자리. spans_가 이 배열을 가리킨다.
     LogSink* singleSinkStorage_[1]{};
 
     // Sink는 소유하지 않는다. 호출자가 배열과 각 Sink의 수명을 유지해야 한다.
     std::span<LogSink*> sinks_;
-    LogLevel level_{LogLevel::Info};
+    LogLevel level_{defaultLevel()};
     CategoryLevels categoryLevels_{};
     mutable std::mutex mutex_;
 };
@@ -236,22 +306,45 @@ LogManager* logManager() noexcept;
 std::string_view toString(LogLevel level) noexcept;
 
 /**
- * @brief 로그 카테고리의 문자열 표현을 반환한다.
+ * @brief 로그 계층의 문자열 표현을 반환한다.
  *
- * @param category 변환할 로그 카테고리.
+ * @param layer 변환할 로그 계층.
  *
- * @return 로그 카테고리의 문자열 표현.
+ * @return 로그 계층의 문자열 표현.
  */
 [[nodiscard]]
-std::string_view toString(LogCategory category) noexcept;
+std::string_view toString(LogLayer layer) noexcept;
 
 /**
- * @brief 전역 로깅 관리자를 통해 로그를 기록한다.
+ * @brief 로그 하위 시스템의 문자열 표현을 반환한다.
+ *
+ * @param subsystem 변환할 로그 하위 시스템.
+ *
+ * @return 로그 하위 시스템의 문자열 표현. LogSubsystem::None이면 빈 문자열.
+ */
+[[nodiscard]]
+std::string_view toString(LogSubsystem subsystem) noexcept;
+
+/**
+ * @brief 로그 줄에 이어 붙일 카테고리 그룹을 만든다.
+ *
+ * 두 시크가 같은 형식을 쓰므로 한 곳에 둔다. 계층 그룹은 항상 만들고 하위
+ * 시스템 그룹은 있을 때만 덧붙인다.
+ *
+ * @param[out] out 이어 붙일 대상 문자열.
+ * @param category 로그 카테고리.
+ *
+ * @note 예: Platform/Win32는 "[Platform][Win32]", Engine/None은 "[Engine]".
+ */
+void appendCategoryGroups(std::string& out, LogCategory category);
+
+/**
+ * @brief 로그를 기록한다.
  *
  * 전역 로그 관리자가 등록되지 않은 경우 로그를 버린다.
  *
  * @param level 로그의 심각도.
- * @param category 로그 카테고리.
+ * @param category 로그가 발생한 계층과 하위 시스템.
  * @param message 로그 메시지.
  * @param location 로그가 호출된 소스 위치.
  */
@@ -283,26 +376,37 @@ std::string formatMessage(std::format_string<Args...> fmt, Args&&... args) {
 // 전역 로깅 프론트엔드
 // -----------------------------------------------------------------------------
 
-#define NXT_LOG_TRACE(category, ...)                                                                                   \
-    ::nxt::core::log::log(::nxt::core::log::LogLevel::Trace, ::nxt::core::log::LogCategory::category,                  \
+/**
+ * @brief 로그 카테고리를 만들어 매크로에 넘긴다.
+ *
+ * 호출부는 layer와 subsystem 이름을 두 인자로만 준다. 구조체 조립은 여기서
+ * 끝나므로 호출부가 중괄호 두 겹을 손으로 쓰지 않는다.
+ */
+#define NXT_LOG_CATEGORY(layer, subsystem)                                                                             \
+    ::nxt::core::log::LogCategory {                                                                                    \
+        ::nxt::core::log::LogLayer::layer, ::nxt::core::log::LogSubsystem::subsystem                                   \
+    }
+
+#define NXT_LOG_TRACE(layer, subsystem, ...)                                                                           \
+    ::nxt::core::log::log(::nxt::core::log::LogLevel::Trace, NXT_LOG_CATEGORY(layer, subsystem),                       \
                           ::nxt::core::log::formatMessage(__VA_ARGS__), std::source_location::current())
 
-#define NXT_LOG_DEBUG(category, ...)                                                                                   \
-    ::nxt::core::log::log(::nxt::core::log::LogLevel::Debug, ::nxt::core::log::LogCategory::category,                  \
+#define NXT_LOG_DEBUG(layer, subsystem, ...)                                                                           \
+    ::nxt::core::log::log(::nxt::core::log::LogLevel::Debug, NXT_LOG_CATEGORY(layer, subsystem),                       \
                           ::nxt::core::log::formatMessage(__VA_ARGS__), std::source_location::current())
 
-#define NXT_LOG_INFO(category, ...)                                                                                    \
-    ::nxt::core::log::log(::nxt::core::log::LogLevel::Info, ::nxt::core::log::LogCategory::category,                   \
+#define NXT_LOG_INFO(layer, subsystem, ...)                                                                            \
+    ::nxt::core::log::log(::nxt::core::log::LogLevel::Info, NXT_LOG_CATEGORY(layer, subsystem),                        \
                           ::nxt::core::log::formatMessage(__VA_ARGS__), std::source_location::current())
 
-#define NXT_LOG_WARN(category, ...)                                                                                    \
-    ::nxt::core::log::log(::nxt::core::log::LogLevel::Warn, ::nxt::core::log::LogCategory::category,                   \
+#define NXT_LOG_WARN(layer, subsystem, ...)                                                                            \
+    ::nxt::core::log::log(::nxt::core::log::LogLevel::Warn, NXT_LOG_CATEGORY(layer, subsystem),                        \
                           ::nxt::core::log::formatMessage(__VA_ARGS__), std::source_location::current())
 
-#define NXT_LOG_ERROR(category, ...)                                                                                   \
-    ::nxt::core::log::log(::nxt::core::log::LogLevel::Error, ::nxt::core::log::LogCategory::category,                  \
+#define NXT_LOG_ERROR(layer, subsystem, ...)                                                                           \
+    ::nxt::core::log::log(::nxt::core::log::LogLevel::Error, NXT_LOG_CATEGORY(layer, subsystem),                       \
                           ::nxt::core::log::formatMessage(__VA_ARGS__), std::source_location::current())
 
-#define NXT_LOG_FATAL(category, ...)                                                                                   \
-    ::nxt::core::log::log(::nxt::core::log::LogLevel::Fatal, ::nxt::core::log::LogCategory::category,                  \
+#define NXT_LOG_FATAL(layer, subsystem, ...)                                                                           \
+    ::nxt::core::log::log(::nxt::core::log::LogLevel::Fatal, NXT_LOG_CATEGORY(layer, subsystem),                       \
                           ::nxt::core::log::formatMessage(__VA_ARGS__), std::source_location::current())

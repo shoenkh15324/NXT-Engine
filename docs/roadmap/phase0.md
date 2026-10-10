@@ -24,7 +24,7 @@ Vulkan 런타임은 준비돼 있다 (RTX 4060, API 1.4.351).
 
 | 파일 | Phase 0에서의 용도 |
 |---|---|
-| `core/diagnostics/log.{hpp,cpp}` | Vulkan 디버그 메시지 출력. `LogCategory::Graphics`가 이미 있음 |
+| `core/diagnostics/log.{hpp,cpp}` | Vulkan 디버그 메시지 출력. `LogSubsystem::Vulkan`이 이미 있음 |
 | `core/diagnostics/assert.{hpp,cpp}` | `VK_CHECK`의 기반 |
 | `core/time/{time,timer}.hpp` | 프레임 타이밍, CPU/GPU 분리 측정 |
 | `platform/.../win32_console_log_sink.*` | 콘솔 출력 |

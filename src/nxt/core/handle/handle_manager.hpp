@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <nxt/core/diagnostics/log.hpp>
 #include <nxt/core/handle/handle.hpp>
 #include <vector>
 
@@ -38,10 +39,15 @@ public:
             freeHead_ = slot.next;
             slot.next = kInvalidIndex;
             slot.alive = true;
+            // 세대를 그대로 둔 채 재사용하므로, 이전 핸들은 이 세대에서 자동으로 stale가 된다.
+            // create()는 물체마다 불리므로 DEBUG로 두면 범람한다. stale 핸들을 쫓을 때
+            // opt-in으로 켜는 TRACE가 맞다.
+            NXT_LOG_TRACE(Core, Handle, "slot reused: index={} generation={}", index, slot.generation);
             return HandleType::make(index, slot.generation);
         }
 
         if (slots_.size() >= kInvalidIndex) {
+            NXT_LOG_TRACE(Core, Handle, "handle slots exhausted: slots={}", slots_.size());
             return HandleType::invalid();
         }
 
@@ -61,6 +67,8 @@ public:
      */
     bool destroy(HandleType handle) noexcept {
         if (!contains(handle)) {
+            NXT_LOG_TRACE(Core, Handle, "destroy rejected: index={} generation={}", handle.index(),
+                          handle.generation());
             return false;
         }
 

@@ -6,15 +6,17 @@
 namespace {
 
 using nxt::core::log::LogCategory;
+using nxt::core::log::LogLayer;
 using nxt::core::log::LogLevel;
 using nxt::core::log::LogRecord;
+using nxt::core::log::LogSubsystem;
 using nxt::platform::win32::log::LogColor;
 using nxt::platform::win32::log::Win32ConsoleLogSink;
 
 LogRecord makeRecord(const LogLevel level, const std::string& message) {
     return LogRecord{
         .level = level,
-        .category = LogCategory::Core,
+        .category = LogCategory{LogLayer::Platform, LogSubsystem::Win32},
         .message = message,
         .threadId = std::this_thread::get_id(),
         .location = std::source_location::current(),
@@ -103,12 +105,12 @@ TEST_CASE("색을 꺼도 (null)이 찍히지 않는다") {
 
 TEST_CASE("조합 결과에 레벨과 카테고리와 메시지가 모두 들어간다") {
     LogRecord record = makeRecord(LogLevel::Error, "swap chain failed");
-    record.category = LogCategory::Renderer;
+    record.category = LogCategory{LogLayer::Renderer, LogSubsystem::World};
 
     const std::string line = Win32ConsoleLogSink::format(record, false);
 
     CHECK(line.find("[ERROR]") != std::string::npos);
-    CHECK(line.find("[Renderer]") != std::string::npos);
+    CHECK(line.find("[Renderer][World]") != std::string::npos);
     CHECK(line.find("swap chain failed") != std::string::npos);
 }
 

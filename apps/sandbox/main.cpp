@@ -42,10 +42,18 @@ int main() {
     nxt::core::log::LogManager manager(sinks);
 
     nxt::core::log::setLogManager(manager);
-    manager.setLevel(nxt::core::log::LogLevel::Trace);
 
-    NXT_LOG_INFO(Engine, "Initializing NXT Engine");
-    NXT_LOG_INFO(Core, "log file : {}", fileSink.defaultPath().string());
+    // 레벨을 직접 지정하지 않는다. LogManager::defaultLevel()이 Debug는 Debug,
+    // Release는 Error를 정한다. 여기서 덮어쓰면 배포본까지 조용해지지 않는다.
+    // 더 낮게 내려야 하면 setLevel()을 호출하되, 그 판단은 앱의 책임이다.
+
+    NXT_LOG_INFO(Engine, None, "Initializing NXT Engine");
+
+    // Sink 안에서는 로그를 남길 수 없다. LogManager가 sink를 부르는 동안 mutex를
+    // 잡고 있어서, sink가 다시 로그를 남기면 같은 mutex를 두 번 잠근다. 그래서
+    // "파일이 열렸는가"를 여기서 대신 확인한다. 로그 파일이 비었을 때
+    // "sink가 안 열렸다"와 "기록할 게 없었다"를 구분할 수 있어야 한다.
+    NXT_LOG_INFO(Core, Diagnostics, "file sink open : {} ({})", fileSink.isOpen(), fileSink.defaultPath().string());
 
     nxt::platform::window::WindowDesc desc;
     desc.title = "NXT Sandbox";
@@ -54,11 +62,11 @@ int main() {
         return 1;
     }
 
-    NXT_LOG_INFO(Platform, "window ready : {}x{} \"{}\"", window->width(), window->height(), desc.title);
+    NXT_LOG_INFO(Platform, Window, "window ready : {}x{} \"{}\"", window->width(), window->height(), desc.title);
     while (window->isOpen()) {
         window->pollEvents();
     }
-    NXT_LOG_INFO(Platform, "window closed");
+    NXT_LOG_INFO(Platform, Window, "window closed");
 
     return 0;
 }

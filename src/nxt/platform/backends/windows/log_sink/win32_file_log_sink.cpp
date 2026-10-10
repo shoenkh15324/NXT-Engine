@@ -155,9 +155,8 @@ void Win32FileLogSink::write(const LogRecord& record) noexcept {
     }
     line += "[";
     line += toString(record.level);
-    line += "][";
-    line += toString(record.category);
     line += ']';
+    appendCategoryGroups(line, record.category);
     line += ' ';
     line += record.message;
     line += '\n';

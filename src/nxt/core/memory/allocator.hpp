@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <limits>
 #include <nxt/core/diagnostics/assert.hpp>
+#include <nxt/core/diagnostics/log.hpp>
 
 #if defined(_MSC_VER)
     #include <malloc.h>
@@ -67,16 +68,23 @@ public:
 
 #if defined(_MSC_VER)
         // MSVC는 std::aligned_alloc을 제공하지 않는다. 따라서 크기를 정렬 배수로 올릴 필요가 없다.
-        return _aligned_malloc(size, alignment);
+        void* const block = _aligned_malloc(size, alignment);
 #else
         // std::aligned_alloc는 size가 alignment의 배수여야 하므로 올려 준다.
         const std::size_t mask = alignment - 1;
         if (size > (std::numeric_limits<std::size_t>::max)() - mask) {
+            NXT_LOG_TRACE(Core, Memory, "system allocation overflow: size={} alignment={}", size, alignment);
             return nullptr;
         }
         const std::size_t alignedSize = ((size == 0 ? std::size_t{1} : size) + mask) & ~mask;
-        return std::aligned_alloc(alignment, alignedSize);
+        void* const block = std::aligned_alloc(alignment, alignedSize);
 #endif
+
+        // 할당 실패는 호출자가 nullptr로 받는다. 원인 정보는 여기서만 얻을 수 있다.
+        if (block == nullptr) {
+            NXT_LOG_TRACE(Core, Memory, "system allocation failed: size={} alignment={}", size, alignment);
+        }
+        return block;
     }
 
     /**

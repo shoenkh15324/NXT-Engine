@@ -8,8 +8,10 @@
 namespace {
 
 using nxt::core::log::LogCategory;
+using nxt::core::log::LogLayer;
 using nxt::core::log::LogLevel;
 using nxt::core::log::LogRecord;
+using nxt::core::log::LogSubsystem;
 using nxt::platform::win32::log::FileLogBufferPolicy;
 using nxt::platform::win32::log::Win32FileLogSink;
 
@@ -24,7 +26,7 @@ std::tm localNow() {
 LogRecord makeRecord(const LogLevel level, const std::string& message, const int line = 100) {
     return LogRecord{
         .level = level,
-        .category = LogCategory::Core,
+        .category = LogCategory{LogLayer::Platform, LogSubsystem::Win32},
         .message = message,
         .threadId = std::this_thread::get_id(),
         .location = std::source_location::current(),
@@ -123,7 +125,7 @@ TEST_CASE("한 줄에 시각과 레벨과 카테고리가 기록된다") {
 
     CHECK(content.find("2026") != std::string::npos);
     CHECK(content.find("[WARN]") != std::string::npos);
-    CHECK(content.find("[Core]") != std::string::npos);
+    CHECK(content.find("[Platform][Win32]") != std::string::npos);
     CHECK(content.find("sink writes message") != std::string::npos);
     CHECK(content.back() == '\n');
 }
