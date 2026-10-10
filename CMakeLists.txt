@@ -20,6 +20,15 @@ endif()
 option(NXT_BUILD_SANDBOX "Build NXT sandbox application" ON)
 option(NXT_BUILD_TESTS "Build NXT tests" OFF)
 
+# graphics 계층이 Vulkan에 의존하므로 configure 시점에 반드시 필요하다.
+# find_package가 include 경로, 로더 라이브러리, glslang 경로를 모두 준다.
+find_package(Vulkan REQUIRED)
+
+# Vulkan::Vulkan은 include 디렉터리를 SYSTEM으로 표시하지 않는다.
+# 각 모듈이 자기 쪽에서 SYSTEM으로 지정한다.
+list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
+include(CompileShaders)
+
 add_subdirectory(src/nxt)
 
 if(NXT_BUILD_SANDBOX)
