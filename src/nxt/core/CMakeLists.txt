@@ -16,6 +16,9 @@ target_sources(nxt_core
             diagnostics/log.hpp
             time/time.hpp
             time/timer.hpp
+            memory/allocator.hpp
+            memory/arena.hpp
+            memory/pool.hpp
 )
 
 target_include_directories(nxt_core PUBLIC "${PROJECT_SOURCE_DIR}/src")
