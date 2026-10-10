@@ -4,7 +4,7 @@
 
 ## 코딩 규칙
 
-- [CODING_RULES.md](CODING_RULES.md) — 모듈 경계, 의존성, 플랫폼 독립성, 명명 규칙
+- [CODING_RULES.md](CODING_RULES.md) — 전 계층 공통 코딩 규약과 계층별 규칙 (명명, 포맷팅, API, 동시성 등)
 
 ## 설계 결정사항
 

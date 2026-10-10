@@ -1,161 +1,128 @@
 # NXT Coding Rules
 
+이 문서는 NXT-Engine **전 계층**에 적용되는 코딩 규약이다.
+
+- 제1부 — 모든 계층에 공통으로 적용되는 일반 규칙
+- 제2부 — `core` / `platform` 등 계층별 규칙
+
+규칙은 방향을 제시하기 위한 것이지, 규칙을 지키려고 코드가 복잡해지는 것을
+정당화하지 않는다. 판단이 갈리면 단순한 쪽을 택한다.
+
+```text
+구조에는 일관되게, 구현에는 유연하게.
+```
+
+## 목차
+
+- [제1부 — 일반 규칙](#제1부--일반-규칙)
+  - [1. 기본 원칙](#1-기본-원칙)
+  - [2. 언어 및 표준](#2-언어-및-표준)
+  - [3. 포맷팅](#3-포맷팅)
+  - [4. 명명 규약](#4-명명-규약)
+  - [5. 헤더](#5-헤더)
+  - [6. 네임스페이스](#6-네임스페이스)
+  - [7. 주석 및 문서화](#7-주석-및-문서화)
+  - [8. 정수 타입](#8-정수-타입)
+  - [9. Ownership과 Lifetime](#9-ownership과-lifetime)
+  - [10. API 설계](#10-api-설계)
+  - [11. Template](#11-template)
+  - [12. Data Structure](#12-data-structure)
+  - [13. 예외](#13-예외)
+  - [14. Assertion](#14-assertion)
+  - [15. 메모리](#15-메모리)
+  - [16. 성능](#16-성능)
+  - [17. Concurrency / Thread Safety](#17-concurrency--thread-safety)
+  - [18. Process I/O](#18-process-io)
+  - [19. 파일 및 디렉터리 구조](#19-파일-및-디렉터리-구조)
+  - [20. Simplicity](#20-simplicity)
+- [제2부 — 계층별 규칙](#제2부--계층별-규칙)
+  - [core (`nxt_core`)](#core-nxt_core)
+  - [platform (`nxt_platform`)](#platform-nxt_platform)
+  - [engine / renderer / graphics / assets](#engine--renderer--graphics--assets)
+- [핵심 원칙](#핵심-원칙)
+
+---
+
+# 제1부 — 일반 규칙
+
 ## 1. 기본 원칙
 
-NXT는 **구조에는 엄격하고, 구현에는 관대하게** 설계한다.
-
-- 모듈 간 책임과 의존성은 명확하게 유지한다.
+- 모듈의 책임과 의존성은 명확하게 유지한다.
 - ownership과 lifetime을 명확하게 한다.
 - 불필요한 추상화와 범용화를 피한다.
-- 요구사항이 발생하기 전에 미래의 확장성을 구현하지 않는다.
-- 구체적인 사용 사례가 여러 개 존재하거나 명확한 확장 요구가 생겼을 때 추상화를 도입한다.
-- 성능 최적화는 측정된 병목을 기준으로 수행한다.
-- 단순한 구현으로 충분하다면 단순한 구현을 우선한다.
+- 단순한 구현으로 충분하면 단순한 구현을 우선한다.
+- 성능 최적화는 측정된 병목을 기준으로 한다.
 
-> 규칙을 지키기 위해 코드가 복잡해져서는 안 된다.
+## 2. 언어 및 표준
 
+- **C++20**을 기준으로 한다.
+- 경고는 켜고 빌드한다.
+  - MSVC: `/W4`
+  - GCC / Clang: `-Wall -Wextra`
+- 경고는 가능하면 제거한다. 불가피한 경우에만 명시적으로 억제한다.
 
-## 2. 의존성
+## 3. 포맷팅
 
-`nxt_core`는 C++ 표준 라이브러리를 기본 의존성으로 사용한다.
-
-```text
-nxt_core
-   ↓
-C++ Standard Library
-```
-
-Core는 특정 외부 라이브러리에 직접 의존하지 않는다.
-
-다음 라이브러리는 Core에서 직접 include하지 않는다.
-
-- `glm`
-- `spdlog`
-- `fmt`
-- `EASTL`
-- `stb`
-- `windows.h`
-- `pthread.h`
-- `unistd.h`
-
-외부 라이브러리가 필요한 경우 상위 모듈 또는 별도의 adapter/backend에서 연결한다.
-
-`nxt_math`는 별도의 foundation 모듈로 유지한다.
-
-Phase 0에서는 `nxt_core`가 `nxt_math`를 직접 참조하지 않는다.
-
-
-## 3. 플랫폼 독립성
-
-Core는 OS API를 직접 호출하지 않는다.
-
-플랫폼에 종속적인 기능이 필요한 경우 다음과 같은 방향으로 의존성을 구성한다.
+포맷은 `.clang-format`을 따른다. 취향보다 포맷터 결과를 신뢰한다.
 
 ```text
-nxt_core
-    ↓
-interface
-    ↓
-platform/
-    ↓
-OS API
+LLVM 기반 · 4 space · 120 column
+pointer left · brace attach · include regroup
 ```
 
-예:
+## 4. 명명 규약
 
-- Windows → `windows.h`
-- Linux → `unistd.h`
-- Thread backend
-- Window backend
-- OS event handling
-- File system backend
+| 대상 | 규칙 | 예 |
+|---|---|---|
+| 타입 | PascalCase | `Handle`, `LogManager` |
+| 함수 / 메서드 | camelCase | `valid()`, `reportAssertFailure()` |
+| 상수 | `k` + PascalCase | `kInvalidIndex` |
+| 멤버 변수 | trailing underscore | `index_`, `categoryLevels_` |
+| 매크로 | `NXT_` + SCREAMING_SNAKE | `NXT_ASSERT`, `NXT_LOG_INFO` |
+| 파일 | snake_case | `handle.hpp`, `spsc_queue.cpp` |
+| namespace | 소문자, 디렉터리와 일치 | `nxt::core::handle` |
 
-단, 실제로 플랫폼 추상화가 필요한 시점까지 불필요한 interface를 미리 만들지 않는다.
-
-
-## 4. Header
+## 5. 헤더
 
 모든 public header는 self-contained해야 한다.
 
-다음과 같이 include했을 때 필요한 선언을 스스로 제공해야 한다.
-
-```cpp
-#include <nxt/core/...>
-```
-
-기본 규칙:
-
-- `#pragma once` 사용
-- 필요한 header는 직접 include
+- `#pragma once`를 사용한다.
+- 필요한 header는 직접 include한다.
 - 우연한 transitive include에 의존하지 않는다.
 - 불필요한 include는 추가하지 않는다.
 
+```cpp
+#include <nxt/core/...>   // 이것만으로 필요한 선언이 제공되어야 한다.
+```
 
-## 5. 예외
+## 6. 네임스페이스
 
-Core는 exception 없이 빌드할 수 있어야 한다.
-
-다음 기능은 Core 코드에서 사용하지 않는다.
-
-- `try`
-- `catch`
-- `throw`
-
-`-fno-exceptions` 환경에서도 빌드 가능하도록 작성한다.
-
-복구 가능한 실패는 반환값으로 처리한다.
+기본 namespace는 `nxt::`이며, 하위 namespace는 기능 영역과 일치시킨다.
 
 ```cpp
-bool destroy(Handle handle);
+nxt::core::handle
+nxt::platform::windows
+nxt::renderer
 ```
 
-프로그래머 오류나 불변식 위반은 `NXT_ASSERT`를 사용한다.
+namespace는 디렉터리 구조와 가능한 한 일관성을 유지한다.
 
-단, 모든 실패를 무조건 별도의 `Error` 타입으로 감싸지는 않는다.
+## 7. 주석 및 문서화
 
-간단한 작업은 다음과 같이 단순한 반환값을 사용할 수 있다.
+- public API는 한국어 Doxygen 주석을 사용한다.
+  ```cpp
+  /// @brief 유효한 슬롯을 가리키는지 여부를 반환한다.
+  ```
+- 내부 구현 주석은 "무엇"보다 **"왜"**에 집중한다.
+- 다음은 값이 있을 때 기록한다.
+  - 특정 memory ordering을 쓰는 이유
+  - ownership / lifetime 제약
+  - 플랫폼 특이사항이나 workaround
+  - 알고리즘의 중요한 불변식
 
-```cpp
-bool contains(Handle handle);
-```
+## 8. 정수 타입
 
-복잡한 오류 정보가 실제로 필요한 경우에만 별도의 Error 타입을 도입한다.
-
-
-## 6. 메모리
-
-Hot path에서 불필요한 암묵적 allocation을 발생시키지 않는다.
-
-가능하면 명시적인 ownership과 lifetime을 유지한다.
-
-메모리 추상화가 필요한 경우 `Allocator`, `Pool`, `Arena` 등의 구조를 사용한다.
-
-예:
-
-```text
-core/memory/
-    allocator.hpp
-    pool.hpp
-    arena.hpp
-```
-
-단, 모든 자료구조에 무조건 Allocator를 주입하지 않는다.
-
-간단한 Core 자료구조에서 `std::vector` 등의 표준 컨테이너를 사용하는 것은 허용한다.
-
-예외:
-
-- 렌더링 hot path
-- 빈번한 frame allocation
-- 명확한 메모리 lifetime 관리가 필요한 경우
-- 성능 측정 결과 allocation이 병목으로 확인된 경우
-
-이러한 경우 명시적인 memory resource 또는 NXT memory abstraction을 사용한다.
-
-
-## 7. 정수 타입
-
-Public API에서는 고정 폭 정수를 사용한다.
+public API에서는 고정 폭 정수를 사용한다.
 
 ```cpp
 std::uint32_t
@@ -164,190 +131,50 @@ std::int32_t
 std::int64_t
 ```
 
-예:
+local variable이나 STL API와의 상호작용에서는 타입을 필요 이상으로 강제하지 않는다.
 
-```cpp
-std::uint32_t index;
-std::uint64_t timestamp;
-```
+## 9. Ownership과 Lifetime
 
-단순한 local variable이나 STL API와의 상호작용 등에서는 필요 이상으로 타입을 강제하지 않는다.
+모든 resource는 명확한 owner를 가진다. 코드만 보고 다음을 알 수 있어야 한다.
 
-
-## 8. Namespace
-
-기본 namespace:
-
-```cpp
-nxt::
-```
-
-하위 namespace는 기능 영역과 일치시킨다.
-
-예:
-
-```cpp
-nxt::jobs
-nxt::mem
-nxt::event
-nxt::diag
-nxt::concurrency
-```
-
-namespace는 디렉터리 구조와 가능한 한 일관성을 유지한다.
-
-
-## 9. Thread Safety
-
-Concurrent public type은 producer / consumer / synchronization contract를 명확하게 한다.
-
-예:
-
-| Type | Producer | Consumer | 보장 |
-|---|---:|---:|---|
-| `SpscQueue` | 1 | 1 | Lock-free |
-| `MpscQueue` | N | 1 | Lock-free |
-| `WorkStealingDeque` | Owner 1 | Stealer N | Lock-free steal |
-
-Thread-safe하지 않은 타입은 별도로 thread-safe하다고 가정하지 않는다.
-
-Atomic ordering은 필요한 최소 수준으로 사용한다.
-
-기본 원칙:
-
-```text
-relaxed
-    ↓
-acquire / release
-    ↓
-seq_cst
-```
-
-가능하면 `relaxed`를 사용하고, synchronization이 필요한 경우 `acquire/release`를 사용한다.
-
-`seq_cst`는 실제로 필요한 경우에만 사용한다.
-
-특정 CPU의 메모리 모델을 전제로 코드를 작성하지 않는다.
-
-Concurrent type의 구현이 복잡한 경우 코드 또는 문서에 synchronization contract를 명시한다.
-
-
-## 10. Process I/O
-
-Core는 프로세스 입출력을 소유하지 않는다. 표준 입출력에 직접 쓰지 않는다.
-
-```cpp
-std::cout
-std::cerr
-printf
-```
-
-출력이 필요하다면 상위 레이어가 소유하는 경로로 넘긴다. 그 경로가 무엇인지는
-각 단계의 문서가 정한다.
-
-단, 실패 경로는 예외다. 종료 조건을 보고하는 기록은 그 경로에 의존하면 안 된다.
-그 경로가 동작하지 않을 때 실패 보고까지 사라지는 것은 허용되지 않고, 곧바로
-종료하므로 보낼 곳도 없다. 직접 기록한 뒤 flush하고 종료한다.
-
-이 예외는 실패 경로에만 적용한다. 복구 가능한 오류는 §5의 Error와 반환값으로
-표현한다.
-
-단, 단순한 로컬 디버깅 과정에서 일시적인 출력 코드를 사용하는 것까지 엄격하게 금지하지 않는다. Debugging 코드가 실제 코드에 남는 경우에는 적절한 diagnostics abstraction으로 교체한다.
-
-
-## 11. Assertion
-
-프로그램의 불변식이나 프로그래머 오류는 assertion으로 검증한다.
-
-예:
-
-```cpp
-NXT_ASSERT(handle.valid());
-NXT_ASSERT(index < size);
-```
-
-Assertion은 일반적인 runtime error handling의 대체 수단으로 사용하지 않는다.
-
-즉:
-
-```text
-예상 가능한 실패
-    → 반환값 / 상태
-
-프로그래머 오류 / 불변식 위반
-    → assertion
-```
-
-Assertion 실패 보고는 §10의 **실패 경로**다. 그 경로에 의존하지 않는다.
-
-
-## 12. Ownership과 Lifetime
-
-모든 resource는 명확한 owner를 가져야 한다.
-
-가능하면 다음 사항을 코드에서 명확하게 알 수 있어야 한다.
-
-- 누가 생성하는가?
-- 누가 소유하는가?
-- 누가 파괴하는가?
+- 누가 생성 / 소유 / 파괴하는가?
 - lifetime은 얼마나 지속되는가?
 - thread 간 공유가 가능한가?
 
-불필요한 raw pointer ownership을 사용하지 않는다.
+owning raw pointer는 피한다. non-owning 참조를 표현하는 용도의 raw pointer는 허용한다.
 
-다만 non-owning reference나 pointer를 표현하는 용도로 raw pointer를 사용하는 것은 허용한다.
+## 10. API 설계
 
+Public API는 필요한 기능만 노출하고, 구현 세부사항은 private으로 유지한다.
 
-## 13. API 설계
+요구사항이 없는데 다음을 미리 추가하지 않는다.
 
-Public API는 필요한 기능만 노출한다.
-
-구현 세부사항은 가능한 한 private으로 유지한다.
-
-다음과 같은 코드를 요구사항 없이 미리 추가하지 않는다.
-
-- 불필요한 template parameter
-- 불필요한 allocator parameter
-- serialization API
-- reflection
+- 불필요한 template / allocator parameter
+- serialization / reflection
 - generic callback system
 - 과도한 trait system
 - 사용하지 않는 configuration structure
 
-예를 들어 현재 요구사항이 다음과 같다면:
-
 ```cpp
-bool contains(Handle handle);
+bool contains(Handle handle);   // 충분하다.
+// Result<bool, ErrorCode, Diagnostics, Context>   // 미리 만들지 않는다.
 ```
 
-단순히 미래의 확장을 이유로 다음과 같이 만들지 않는다.
+실제 요구가 생긴 경우에만 확장한다.
 
-```cpp
-Result<bool, ErrorCode, Diagnostics, Context>
-```
+## 11. Template
 
-실제 요구사항이 생긴 경우에만 API를 확장한다.
-
-
-## 14. Template
-
-Template은 실제로 필요한 경우 사용한다.
-
-다음과 같은 경우 template 사용을 우선 고려한다.
+실제로 필요한 경우에 사용한다.
 
 - 타입에 따라 동작이 달라지는 자료구조
-- compile-time abstraction
-- zero-cost abstraction
+- compile-time abstraction / zero-cost abstraction
 - 명확한 code reuse
 
-반대로 단순히 "나중에 다른 타입을 사용할 수도 있으니까"라는 이유만으로 template화하지 않는다.
+"나중에 다른 타입을 쓸 수도 있으니까"라는 이유만으로 template화하지 않는다.
 
+## 12. Data Structure
 
-## 15. Data Structure
-
-자료구조는 먼저 가장 단순한 구현을 선택한다.
-
-예:
+먼저 가장 단순한 구현을 선택한다.
 
 ```cpp
 std::vector
@@ -356,177 +183,176 @@ std::span
 std::optional
 ```
 
-등의 표준 자료구조로 충분하다면 직접 구현하지 않는다.
-
-직접 자료구조를 구현해야 하는 경우는 다음과 같다.
+표준 자료구조로 충분하면 직접 구현하지 않는다. 다음 요구가 있을 때 직접 구현한다.
 
 - 성능 요구
 - 특정 concurrency model
 - 특수한 memory layout
-- 명확한 ownership/lifetime 요구
-- 표준 자료구조로 표현하기 어려운 엔진 특화 요구
+- 명확한 ownership / lifetime 요구
 
-예:
+## 13. 예외
+
+프로젝트는 exception 없이 빌드 가능한 것을 목표로 한다.
+
+- 복구 가능한 실패는 반환값으로 처리한다.
+  ```cpp
+  bool destroy(Handle handle);
+  ```
+- 프로그래머 오류나 불변식 위반은 assertion으로 처리한다.
+- 모든 실패를 무조건 별도의 `Error` 타입으로 감싸지 않는다. 복잡한 오류
+  정보가 실제로 필요할 때만 도입한다.
+
+## 14. Assertion
+
+프로그래머 오류와 불변식은 `NXT_ASSERT` / `NXT_VERIFY`로 검증한다.
 
 ```text
-std::vector
-    ↓
-성능/수명/메모리 요구 발생
-    ↓
-Pool / Arena / Custom Container
+예상 가능한 실패      → 반환값 / 상태
+프로그래머 오류       → assertion
 ```
 
+Assertion은 일반적인 runtime error handling의 대체 수단으로 사용하지 않는다.
 
-## 16. Performance
+## 15. 메모리
+
+- hot path에서 불필요한 암묵적 allocation을 만들지 않는다.
+- ownership과 lifetime을 가능한 한 명시적으로 유지한다.
+- 메모리 추상화가 필요하면 `Allocator`, `Pool`, `Arena`를 사용한다.
+- 모든 자료구조에 allocator를 주입하지는 않는다. 단순한 자료구조에서
+  `std::vector` 같은 표준 컨테이너를 쓰는 것은 허용한다.
+
+다음 경우는 명시적인 memory resource를 우선 고려한다.
+
+- 렌더링 hot path
+- 빈번한 frame allocation
+- 명확한 memory lifetime 관리가 필요한 경우
+- 측정 결과 allocation이 병목으로 확인된 경우
+
+## 16. 성능
 
 성능을 추측해서 최적화하지 않는다.
-
-기본 순서:
 
 ```text
 Simple implementation
         ↓
-Measure
-        ↓
-Identify bottleneck
-        ↓
-Optimize
-        ↓
-Measure again
+Measure → Identify bottleneck → Optimize → Measure again
 ```
 
-특히 다음을 이유 없이 적용하지 않는다.
+다음을 이유 없이 적용하지 않는다.
 
-- lock-free
-- custom allocator
-- object pool
-- intrusive container
-- SIMD
-- custom container
-- complex caching
-- aggressive memory ordering
+- lock-free, custom allocator, object pool
+- intrusive container, custom container
+- SIMD, complex caching, aggressive memory ordering
 
-필요성이 측정되거나 명확한 설계 요구가 있을 때 도입한다.
+필요성이 측정되거나 설계 요구가 명확할 때 도입한다.
 
+## 17. Concurrency / Thread Safety
 
-## 17. Concurrency
+- 필요한 곳에만 사용한다. 단일 thread로 충분한 기능을 억지로 concurrent하게
+  만들지 않는다.
+- 도입 전에 다음을 먼저 정의한다.
+  1. 누가 생성 / 소비하는가?
+  2. ownership은 누구에게 있는가?
+  3. synchronization은 어디서 일어나는가?
+  4. lifetime은 어떻게 보장되는가?
+- concurrent public type은 producer / consumer / synchronization contract를
+  명확히 한다.
+- atomic ordering은 필요한 최소 수준을 쓴다.
 
-Concurrency는 필요한 곳에서만 사용한다.
+  ```text
+  relaxed → acquire / release → seq_cst
+  ```
 
-단일 thread로 충분한 기능을 억지로 concurrent하게 만들지 않는다.
+- 특정 CPU의 메모리 모델을 전제로 코드를 작성하지 않는다.
+- thread-safe하지 않은 타입을 thread-safe하다고 가정하지 않는다.
 
-Concurrency를 도입할 경우 다음을 먼저 정의한다.
+## 18. Process I/O
 
-1. 누가 데이터를 생성하는가?
-2. 누가 데이터를 소비하는가?
-3. ownership은 누구에게 있는가?
-4. synchronization은 어디에서 발생하는가?
-5. lifetime은 어떻게 보장되는가?
+표준 입출력에 직접 쓰지 않고, 상위 레이어가 소유하는 경로로 넘긴다.
 
-그 후 mutex, atomic, queue, lock-free structure 등의 방법을 선택한다.
+```cpp
+std::cout / std::cerr / printf
+```
 
-Lock-free를 사용하는 것 자체를 목표로 하지 않는다.
+단, 실패 경로는 예외다. 종료 조건을 보고하는 기록은 그 경로에 의존하면 안 되며,
+직접 기록한 뒤 flush하고 종료한다.
 
+로컬 디버깅용 임시 출력은 허용하지만, 실제 코드에 남기지 않는다.
 
-## 18. 파일 및 디렉터리 구조
+## 19. 파일 및 디렉터리 구조
 
 디렉터리는 기능적 책임을 기준으로 나눈다.
 
-예:
-
-```text
-src/nxt/
-├── core/
-│   ├── handle/
-│   ├── memory/
-│   ├── concurrency/
-│   └── ...
-├── jobs/
-├── event/
-├── renderer/
-│   └── memory/
-├── platform/
-│   └── backends/
-│       └── windows/
-└── ...
-```
-
-파일을 추가할 때는 먼저 다음을 판단한다.
+파일을 추가할 때 먼저 다음을 판단한다.
 
 > "이 코드의 책임은 어디에 있는가?"
 
-서로 다른 책임을 하나의 파일에 무리하게 넣지 않는다.
-
-반대로 단순한 코드까지 지나치게 세분화하지 않는다.
-
-
-## 19. Comments
-
-코드가 무엇을 하는지 그대로 설명하는 주석은 최소화한다.
-
-다음과 같은 경우에는 주석을 작성한다.
-
-- 왜 이렇게 구현했는지
-- 특정 memory ordering을 사용하는 이유
-- ownership 규칙
-- lifetime 제약
-- 플랫폼 특이사항
-- 알고리즘의 중요한 불변식
-- 외부 API의 특이한 동작에 대한 workaround
-
-예:
-
-```cpp
-// acquire is required here because the consumer
-// must observe the producer's published payload.
-```
-
-단순한 코드 설명은 코드 자체로 표현한다.
-
+서로 다른 책임을 한 파일에 무리하게 넣지 않는다. 반대로 단순한 코드까지
+지나치게 세분화하지 않는다.
 
 ## 20. Simplicity
 
-NXT의 모든 설계에서 다음 원칙을 우선한다.
-
 > **필요한 만큼만 만든다.**
 
-다음 상황에서는 추상화를 추가하지 않는다.
+다음 경우에는 추상화를 추가하지 않는다.
 
-- 아직 사용 사례가 하나뿐인 경우
+- 사용 사례가 아직 하나뿐인 경우
 - 확장 가능성이 단순한 추측에 불과한 경우
 - 추상화가 현재 코드를 더 복잡하게 만드는 경우
-- 성능상의 이점이 측정되지 않은 경우
 
-다음과 같은 요구가 발생하면 추상화를 고려한다.
+반복되는 패턴, 실제로 다른 구현의 필요, 모듈 의존성 분리, 성능·lifetime
+요구, 플랫폼 차이 은폐가 확인되면 추상화를 고려한다.
 
-- 동일한 패턴이 여러 곳에서 반복되는 경우
-- 서로 다른 구현이 실제로 필요한 경우
-- 모듈 간 의존성을 끊어야 하는 경우
-- 성능 또는 lifetime 요구가 명확해진 경우
-- 플랫폼 차이를 숨겨야 하는 경우
+---
 
+# 제2부 — 계층별 규칙
 
-## 21. 핵심 원칙
+## core (`nxt_core`)
+
+Core는 가장 아래 계층이며, 어떤 외부 라이브러리에도 종속되지 않도록 유지한다.
+
+- **의존성**: C++ 표준 라이브러리만 사용한다. 다음은 Core에서 직접 include하지 않는다.
+  - `glm` · `spdlog` · `fmt` · `EASTL` · `stb`
+  - `windows.h` · `pthread.h` · `unistd.h`
+- **플랫폼 독립성**: OS API를 직접 호출하지 않는다. 플랫폼 기능이 필요하면
+  interface를 두고 `platform` backend가 구현한다.
+
+  ```text
+  nxt_core → interface → platform/ → OS API
+  ```
+
+  단, 실제로 필요한 시점까지 불필요한 interface를 미리 만들지 않는다.
+- **예외**: exception 없이(`-fno-exceptions`) 빌드 가능해야 한다. `try` /
+  `catch` / `throw`를 사용하지 않는다.
+- **Process I/O**: Core는 프로세스 입출력을 소유하지 않는다.
+- **namespace**: `nxt::core::...`
+
+## platform (`nxt_platform`)
+
+- `nxt_core`에 의존한다.
+- OS API와 외부 라이브러리 연결을 담당한다.
+- backend는 `platform/backends/<os>/`에 둔다.
+- 로깅 sink처럼 실제 출력을 수행하는 구현을 소유한다.
+- **namespace**: `nxt::platform::...`
+
+## engine / renderer / graphics / assets
+
+- 상위 계층은 하위 계층에 의존한다. 역방향 의존은 만들지 않는다.
+- 외부 라이브러리는 상위 계층 또는 backend에서 연결한다.
+- 세부 규칙은 각 계층 문서와 `docs/roadmap/`을 따른다.
+
+---
+
+# 핵심 원칙
 
 ```text
-Architecture
-    → Strict
-
-Ownership
-    → Clear
-
-Module Boundary
-    → Strict
-
-Implementation
-    → Simple
-
-Abstraction
-    → As Needed
-
-Optimization
-    → Measure First
+Architecture     → Consistent
+Ownership        → Clear
+Module Boundary  → Clear
+Implementation   → Simple
+Abstraction      → As Needed
+Optimization     → Measure First
 ```
 
-NXT는 미래의 모든 요구사항을 미리 해결하는 것이 아니라,
-**현재 필요한 요구사항을 단순하게 해결하고 실제 요구가 발생했을 때 확장한다.**
+NXT는 미래의 모든 요구사항을 미리 해결하지 않는다. **현재 필요한 요구사항을
+단순하게 해결하고, 실제 요구가 발생했을 때 확장한다.**
