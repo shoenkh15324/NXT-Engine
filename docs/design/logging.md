@@ -35,7 +35,7 @@ namespace nxt::log
 출력 대상인 Sink는 platform 계층에 두므로 다른 namespace를 쓴다.
 
 ```cpp
-namespace nxt::platform::windows::log
+namespace nxt::platform::win32::log
 ```
 
 ## 3. LogLevel

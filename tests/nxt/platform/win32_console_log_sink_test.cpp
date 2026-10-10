@@ -8,8 +8,8 @@ namespace {
 using nxt::core::log::LogCategory;
 using nxt::core::log::LogLevel;
 using nxt::core::log::LogRecord;
-using nxt::platform::windows::log::LogColor;
-using nxt::platform::windows::log::Win32ConsoleLogSink;
+using nxt::platform::win32::log::LogColor;
+using nxt::platform::win32::log::Win32ConsoleLogSink;
 
 LogRecord makeRecord(const LogLevel level, const std::string& message) {
     return LogRecord{

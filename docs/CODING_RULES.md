@@ -101,7 +101,7 @@ pointer left · brace attach · include regroup
 
 ```cpp
 nxt::core::handle
-nxt::platform::windows
+nxt::platform::win32
 nxt::renderer
 ```
 

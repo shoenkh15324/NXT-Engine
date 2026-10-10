@@ -10,8 +10,8 @@ namespace {
 using nxt::core::log::LogCategory;
 using nxt::core::log::LogLevel;
 using nxt::core::log::LogRecord;
-using nxt::platform::windows::log::FileLogBufferPolicy;
-using nxt::platform::windows::log::Win32FileLogSink;
+using nxt::platform::win32::log::FileLogBufferPolicy;
+using nxt::platform::win32::log::Win32FileLogSink;
 
 [[nodiscard]]
 std::tm localNow() {

@@ -68,7 +68,7 @@ Instance → Surface → Device → Memory → Swapchain → CommandBuffer → p
 - [x] Vulkan SDK 설치 — 1.4.363.0
 - [x] `find_package(Vulkan REQUIRED)` 연결
 - [x] include · `vulkan-1.lib` · glslang 경로 탐지 확인
-- [ ] GPU 초기화 1회 확인 — SDK 샘플로
+- [x] GPU 초기화 1회 확인 — SDK 샘플로
 
 ## A2. 스켈레톤 배선 (C++ 코드 없음)
 

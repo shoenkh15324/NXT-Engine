@@ -11,7 +11,7 @@
 //
 // Fatal은 즉시 flush하고, 그 외는 버퍼가 임계치에 찰 때만 파일로 넘긴다.
 
-namespace nxt::platform::windows::log {
+namespace nxt::platform::win32::log {
 
 using namespace nxt::core::log;
 
@@ -141,4 +141,4 @@ private:
     std::size_t buffered_{0};
 };
 
-} // namespace nxt::platform::windows::log
+} // namespace nxt::platform::win32::log

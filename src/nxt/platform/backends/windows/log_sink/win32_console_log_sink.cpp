@@ -15,7 +15,7 @@
 
 #include <windows.h>
 
-namespace nxt::platform::windows::log {
+namespace nxt::platform::win32::log {
 
 using namespace nxt::core::log;
 
@@ -164,4 +164,4 @@ void Win32ConsoleLogSink::write(const LogRecord& record) noexcept {
     }
 }
 
-} // namespace nxt::platform::windows::log
+} // namespace nxt::platform::win32::log

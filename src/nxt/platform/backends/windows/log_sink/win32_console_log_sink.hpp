@@ -8,7 +8,7 @@
     Windows 콘솔에 로그를 기록하는 Sink.
 */
 
-namespace nxt::platform::windows::log {
+namespace nxt::platform::win32::log {
 
 using namespace nxt::core::log;
 
@@ -86,4 +86,4 @@ private:
     bool colorOnStandardError_;
 };
 
-} // namespace nxt::platform::windows::log
+} // namespace nxt::platform::win32::log

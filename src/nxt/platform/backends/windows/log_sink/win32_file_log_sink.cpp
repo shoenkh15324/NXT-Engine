@@ -14,7 +14,7 @@
 
 #include <windows.h>
 
-namespace nxt::platform::windows::log {
+namespace nxt::platform::win32::log {
 
 using namespace nxt::core::log;
 
@@ -212,4 +212,4 @@ void Win32FileLogSink::commit() noexcept {
     stream_.flush();
 }
 
-} // namespace nxt::platform::windows::log
+} // namespace nxt::platform::win32::log
