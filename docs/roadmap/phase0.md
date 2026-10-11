@@ -12,8 +12,8 @@
 |---|---|
 | **A1 환경** | 🟢 완료. SDK 1.4.363.0 설치, `find_package(Vulkan)` 동작 확인 |
 | **A2 스켈레톤 배선** | 🟢 완료. Vulkan 소스 0개로 target 7개 생성, 빌드·테스트 통과 |
-| **A3 창** | 🔴 `win32_window.*` 0바이트, `window.hpp`는 주석만 |
-| **A4 RHI 스파인** | 🔴 전부 없음. `nxt_graphics`는 지금 INTERFACE, A4에서 STATIC으로 전환 |
+| **A3 창** | 🟢 완료. `Window` interface + `Win32Window` (HWND) |
+| **A4 RHI 스파인** | 🟡 착수. CMake 배선·디렉터리 구조 완료, `rhi/` 6개 헤더 작성. Vulkan 소스 0줄 |
 | **A5 프레임 루프** | 🔴 `engine/frame_loop.*` 0바이트 |
 | **B 삼각형** | 🔴 미착수 |
 | **C 계층 배선** | 🔴 미착수 |
@@ -103,8 +103,8 @@ FILE_SET 이름이 다르면 TYPE HEADERS를 명시하고 소문자로 쓴다.
 
 ## A3. 창
 
-- [ ] `platform/window/window.hpp` — interface
-- [ ] `platform/backends/windows/win32_window.{hpp,cpp}` — HWND
+- [x] `platform/window/window.hpp` — interface
+- [x] `platform/backends/windows/win32_window.{hpp,cpp}` — HWND
 
 ```cpp
 class Window {
@@ -120,17 +120,181 @@ platform은 `HWND`까지만 준다. `VkSurfaceKHR`를 만드는 일은 graphics�
 
 ## A4. RHI 스파인
 
+구조와 CMake 배선 (완료)
+
+- [x] `graphics/runtime/` 삭제. `rhi/`로 통합한다 (아래 "착수 시 결정할 것" 참조)
+- [x] `nxt_graphics` INTERFACE → STATIC
+- [x] Vulkan include/link를 `INTERFACE` → `SYSTEM PRIVATE`로 전환
+- [x] `nxt_core` · `nxt_platform` 링크, `/W4`, `VULKAN_HPP_DISPATCH_LOADER_DYNAMIC=1`
+- [x] `FILE_SET HEADERS`(공개) + `FILE_SET backend_headers`(백엔드) 배선
+- [x] **검증: `nxt_graphics.vcxproj` 생성. `renderer`·`engine`·`sandbox`에 Vulkan include 경로 없음**
+
 공개 헤더 (`src/nxt/graphics/rhi/`)
 
 - [ ] `rhi.hpp` — umbrella
-- [ ] `enums.hpp` — Format, Topology, PresentMode, LoadOp, StoreOp, IndexType, BufferUsage
-- [ ] `memory.hpp` — GPU 메모리
+- [x] `handle.hpp` — `OpaqueHandle`, `ResourceHandle<Tag>`
+- [x] `enums.hpp` — Format, Topology, PresentMode, LoadOp, StoreOp, IndexType, BufferUsage
+- [x] `memory.hpp` — GPU 메모리, `MemoryProperty`, allocate·free·map·unmap
 - [ ] `instance.hpp` — Instance, Surface
 - [ ] `device.hpp` — Device, Queue
 - [ ] `swapchain.hpp`
-- [ ] `command_buffer.hpp` — CommandBuffer, CommandEncoder
-- [ ] `fence.hpp`
+- [x] `semaphore.hpp` — Semaphore (`frame.md` §5가 요구. A4 목록에 누락돼 있었다)
+- [x] `fence.hpp` — create·destroy·wait·reset·isSignaled
+- [ ] `command_buffer.hpp` — CommandBuffer, CommandEncoder, RenderPassDesc
+- [x] `image.hpp` — ImageView (`Image` 자체는 B4)
 - [ ] `resource_deletion.hpp` — fence 기반 지연 파괴
+
+### RHI 타입은 두 패턴을 함께 쓴다
+
+하나로 통일하지 않는다. 상태의 성격이 다르다.
+
+```text
+값 핸들 + 자유 함수       Fence  Semaphore  Memory  CommandBuffer
+                         리소스 하나가 핸들 하나면 충분하다
+
+추상 클래스 + factory     Instance  Device  Swapchain
+                         vk 핸들 외에 자체 상태가 있고 해제 순서가 있다
+                         Swapchain은 format·imageCount·view 배열을 들고 있다
+```
+
+```cpp
+using Fence = ResourceHandle<FenceTag>;          // 값 타입
+void waitFence(const Device& device, const Fence& fence);
+
+class Swapchain {                                 // 다형성
+public:
+    static std::unique_ptr<Swapchain> create(const SwapchainDesc&);
+    virtual ~Swapchain() = default;
+    virtual ImageView imageView(std::uint32_t index) const = 0;
+};
+```
+
+**`Instance`·`Device`·`Swapchain`의 `create()`는 rhi/에 선언만 하고 backend가 정의한다.**
+그래서 factory를 RHI 밖에서 작성할 수 없다 — 규칙이 관례가 아니라 빌드 구조로 강제된다.
+
+Fence를 `unique_ptr`로 만들지 않는 이유는 `frame.md` §5의 두 배열 때문이다.
+
+```text
+acquire_semaphores[framesInFlight]        ← 프레임 인덱스
+submit_semaphores[swapchainImageCount]    ← 이미지 인덱스
+```
+
+`std::vector<std::unique_ptr<Semaphore>>`를 색인해야 하면 이 규칙이 성에 안 맞는다.
+
+### Semaphore에 단독 대기 연산이 없다
+
+Vulkan의 semaphore 대기는 항상 submit·present의 wait 목록에 넣어서 한다. 독립된
+"semaphore 대기"가 존재하지 않는다. CPU가 기다리려면 fence를 쓴다.
+
+그래서 `semaphore.hpp`는 생성과 해제만 가진다. device 전체를 기다리는 일도
+fence로 해결한다 (`frame.md` §6 리사이즈 2번도 fence 대기). `rhi.md` §8이
+"Pipeline barrier는 submit의 암묵적 대기로 충분하다"고 한 이유와 같다.
+
+`waitFence`에 timeout 인자를 넣지 않은 것도 같은 이유다. `frame.md` §5가 "무한정
+기다리는 쪽이 옳다고 가정한다"고 명시했다. 호출자가 없는 timeout 파라미터는
+`CODING_RULES.md` §10이 금지하는 요구사항 없는 추상화다.
+
+### GPU 객체는 디바이스를 명시적으로 받는다
+
+`fence`·`semaphore`·`memory`의 모든 연산은 첫 인자가 `const Device&`다.
+
+```cpp
+Fence createFence(const Device& device);
+Memory allocateMemory(const Device& device, std::uint64_t size, MemoryProperty required);
+```
+
+이유는 Vulkan의 규약 그대로다. GPU 객체의 생성과 소멸은 전부 디바이스가 행위한다.
+
+```text
+vkAllocateMemory(device, ...)      vkCreateFence(device, ...)
+vkMapMemory(device, ...)           vkWaitForFences(device, ...)
+vkFreeMemory(device, ...)           vkResetFences(device, ...)
+```
+
+디바이스를 인자로 받지 않으면 백엔드가 숨은 상태를 들고 있어야 하고, 그 순간
+"누가 생성·소유·파괴하는가"를 코드만으로 알 수 없게 된다 (`CODING_RULES.md` §9).
+
+`Instance`이 만드는 것은 `Surface`와 `Device` 둘뿐이고, 나머지는 전부 `Device`가
+만든다. 이 규칙은 `instance.hpp`부터 계속 적용된다.
+
+`class Device;` 전방선언만으로 충분하므로 `fence.hpp`·`semaphore.hpp`·`memory.hpp`은
+`device.hpp`를 include하지 않는다. 세 파일은 서로에게도 의존하지 않는 리프다.
+
+### Memory는 CPU 할당자와 대체 관계가 아니다
+
+```text
+SystemAllocator  →  _aligned_malloc / std::aligned_alloc        →  CPU 가상 메모리
+rhi::Memory      →  vkAllocateMemory(memoryTypeBits) + vkMapMemory  →  GPU 메모리
+```
+
+`MemoryProperty`로 요구한 성질을 모두 가진 타입을 GPU가 찾지 못하면 할당이 실패한다.
+어떤 GPU는 `HostVisible`과 `DeviceLocal`을 동시에 주지 않는다.
+
+Phase 0의 업로드 버퍼는 아래 조합이면 충분하다. `HostCoherent` 덕분에 명시적 flush가
+없다 — 그 성질이 없으면 CPU 쓰기가 GPU에 반영되지 않는다.
+
+```cpp
+MemoryProperty::HostVisible | MemoryProperty::HostCoherent | MemoryProperty::TransferDst
+```
+
+`HostVisible`은 PCIe를 지나 CPU가 접근할 수 있게 하고, `HostCoherent`은 그 쓰기를
+별도 신호 없이 GPU가 보게 만든다. 할당은 한두 번뿐이라 allocator 계층은 만들지
+않는다. VMA는 Phase 2에서 검토한다.
+
+### 핸들은 `nxt_core::handle::Handle`를 상속하지 않는다
+
+| | `core::handle::Handle<Tag>` | `rhi::ResourceHandle<Tag>` |
+|---|---|---|
+| 저장 | `{index: u32, generation: u32}` | `value: u64` |
+| 짝 | `HandleManager` 필수 | 없음 |
+| 세대 관리 | 직접 함 | Vulkan이 함 |
+| 쓰임새 | Phase 2 애셋 (`scene_world.md` §7) | Phase 0 GPU 리소스 |
+
+Vulkan은 `VkImageView`와 `VkBuffer`를 다른 타입으로 선언하지만 실제로는 둘 다 64비트 값이다.
+그 값들을 그대로 다루면 실수를 컴파일 시점에 못 잡는다. 태그로 종류를 구분해 막는다.
+
+### `ImageView`만 A4에 먼저 넣는 이유
+
+B4가 깊이 버퍼를 앞당긴 것과 같은 논리다.
+
+> **깊이 버퍼를 여기서 넣는다.** 삼각형 하나에는 시각적으로 필요 없지만, 나중에 넣으면
+> 다섯 곳을 다시 건드린다.
+
+스왑체인 이미지는 0-A부터 render pass의 color attachment 자리에 view가 들어가야 한다.
+`image.hpp`를 A4에 만들고 `ImageView`만 넣은 뒤, B4에서 `Image`를 더한다.
+
+### 핸들 헤더는 어떤 TU에서도 include되지 않는다
+
+`FILE_SET HEADERS`는 IDE에 파일로 노출만 하고 **컴파일하지 않는다.** `.cpp` 하나가
+헤더를 include하기 전까지는 그 안에 문법 오류가 있어도 빌드가 통과한다.
+
+`A4` 검증은 임시 TU로 헤더를 단독 컴파일해서 한다. `/W4 /WX`로 올린다.
+
+```powershell
+cl /std:c++20 /W4 /WX /utf-8 /permissive- /c /I "%SRC%" rhi_check.cpp
+```
+
+헤더는 자기 완결이어야 한다 (`CODING_RULES.md` §5). 필요한 헤더는 직접 include하고
+transitive include에 기대지 않는다.
+
+시그니처까지 고정하려면 함수 포인터에 대입한다. `const&`가 빠졌다고 컴파일은 된다.
+
+```cpp
+static_assert(std::is_same_v<decltype(&waitFence), void (*)(const Device&, const Fence&)>);
+```
+
+**검증 코드의 기대값은 헤더에서 복사하지 않는다.** 비트 값을 직접 세어 고정한다.
+
+```cpp
+constexpr BufferUsage kVertices = BufferUsage::Vertex | BufferUsage::TransferDst;
+static_assert(static_cast<std::uint32_t>(kVertices) == 33u);   // Vertex=1<<0, TransferDst=1<<5
+```
+
+`TransferDst`는 `1u << 5`라서 32다. `1u << 4`(TransferSrc)와 헷갈리기 쉽고,
+기대값을 잘못 쓰면 컴파일 자체가 아니라 검증이 조용히 틀어진다.
+
+MSVC 콘솔에서 한국어 오류 메시지가 깨지면 오류 코드를 함께 본다. `static_assert`가
+실패한 줄과 다른 줄에서 그 진짜 원인이 보이는 경우가 있다.
 
 백엔드 구현 (`src/nxt/graphics/backends/vulkan/`)
 
@@ -143,6 +307,15 @@ platform은 `HWND`까지만 준다. `VkSurfaceKHR`를 만드는 일은 graphics�
 `vulkan_loader`를 직접 작성하지 않는다. `find_package(Vulkan)`이 준 `Vulkan::Vulkan`을
 링크하고 Vulkan-Hpp의 동적 디스패처를 쓴다. 근거는
 [`../design/rhi.md` §6](../design/rhi.md) — 이전 문서의 "직접 로드"는 철회했다.
+
+**`vulkan_types.hpp`가 enums를 소비하는 지점이다.** `rhi::Format` ↔ `VkFormat` 매핑을
+여기에 둔다. 배열 조회 대신 `switch`를 쓴다 — `/W4`가 `case` 누락을 잡아주므로,
+나중에 열거형을 늘렸는데 매핑을 빠뜨리면 컴파일 시점에 드러난다.
+
+**RHI 밖으로 `vk::`가 새지 않는지 그 자체로 검증되는 지점이다.** 이 파일이
+`vulkan/vulkan.hpp`를 처음 include하고 `ResourceHandle<Tag>`를 처음 역변환한다.
+
+`vulkan_types.hpp`만 `vulkan/vulkan.hpp`를 include한다. 다른 어떤 파일도 직접 하지 않는다.
 
 **`memory.hpp`가 별도 계층인 이유.** `SystemAllocator`로 대체되지 않는다.
 
@@ -268,7 +441,16 @@ depth는 어차피 Phase 3에 존재한다. 그때 넣으면 Phase 0의 렌더 �
 
 | 질문 | 기본값 | 상태 |
 |---|---|---|
-| `graphics/runtime/` 생존 여부 | 삭제하고 `rhi/`로 통합 | 미결. placeholder CMakeLists는 A2에서 삭제함 |
-| namespace 규칙 | flat한 디렉터리는 이름 반복 안 함 (`nxt::math`) | 미결 |
-| graphics 테스트 | Phase 0는 없음 | 미결 |
+| `graphics/runtime/` 생존 여부 | 삭제하고 `rhi/`로 통합 | **결정됨 — 삭제.** `frame.md` §3/§7의 `graphics/runtime`은 디렉터리가 아니라 모듈 `nxt_graphics`를 가리키는 표현이다 |
+| namespace 규칙 | flat한 디렉터리는 이름 반복 안 함 (`nxt::math`) | **결정됨 — `nxt::graphics::rhi`.** `rhi.md` §8이 이미 `nxt_graphics::rhi::Memory`로 이름을 확정했다. 백엔드는 `nxt::graphics::vulkan` (`platform::win32` 선례) |
+| graphics 테스트 | Phase 0는 없음 | **결정됨 — 없음.** 검증은 grep 게이트 + 단독 컴파일로 한다. null 백엔드는 요구되지 않았고 그만큼 비싸다 |
+| instance 확장 | `VK_EXT_debug_utils`만 | 미결 |
+| `render pass` 이름 충돌 | RHI는 기술자(descriptor) | **결정됨 — `rhi::RenderPassDesc`.** renderer 쪽 `RenderPass`(개별 패스)와 구분한다 |
+
+### `frame.md`의 `graphics/runtime` 표기
+
+`frame.md` §3과 §7이 `graphics/runtime`을 디렉터리처럼 적었지만, 그 책임(디바이스
+초기화 · 프레임 제출 관리 · present 소유권)은 `rhi.md` §8이 `rhi/`의
+Instance·Device·Swapchain·CommandBuffer·Fence·ResourceDeletion에 이미 배정돼 있다.
+**같은 책임을 부르는 이름이 두 개였다.** `rhi/` 쪽이 이겼으므로 코드는 `rhi/`를 따른다.
 | instance 확장 | `VK_EXT_debug_utils`만 | 미결 |
