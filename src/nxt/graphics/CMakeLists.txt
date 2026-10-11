@@ -45,5 +45,10 @@ target_sources(nxt_graphics
         BASE_DIRS "${PROJECT_SOURCE_DIR}/src"
         FILES
             rhi/rhi.hpp
+            rhi/handle.hpp
             rhi/semaphore.hpp
+            rhi/image.hpp
+            rhi/enums.hpp
+            rhi/fence.hpp
+            rhi/memory.hpp
 )
