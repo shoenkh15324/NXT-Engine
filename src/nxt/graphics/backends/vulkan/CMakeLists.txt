@@ -6,7 +6,7 @@
 # include 경로와 Vulkan::Vulkan 링크는 상위 graphics/CMakeLists.txt가 설정했다.
 # 여기서는 구현 파일만 등록한다.
 #
-# vulkan_types.hpp는 backend 구현부만 include한다. 그래서 공개 FILE_SET이# 아니라 PRIVATE FILE_SET에 둔다.
+# vulkan_types.hpp는 backend 구현부만 include한다. 그래서 공개 FILE_SET이 아니라 PRIVATE FILE_SET에 둔다.
 
 target_sources(nxt_graphics
     # 백엔드 헤더. 이름이 HEADERS가 아니므로 TYPE을 명시한다.
@@ -25,5 +25,6 @@ target_sources(nxt_graphics
         vulkan_swapchain.cpp
         vulkan_command_buffer.cpp
         vulkan_fence.cpp
+        vulkan_semaphore.cpp
         vulkan_resource_deletion.cpp
 )
