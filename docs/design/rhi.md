@@ -173,7 +173,7 @@ Memory (여기)    →  vkAllocateMemory(memoryTypeBits) + vkMapMemory
 ```
 
 memory type bits(`DEVICE_LOCAL` · `HOST_VISIBLE` · `HOST_COHERENT` ·
-`TRANSFER_SRC` · `TRANSFER_DST`)와 mapping을 다뤄야 하며, `SystemAllocator`를
+`HOST_CACHED`)와 mapping을 다뤄야 하며, `SystemAllocator`를
 감싸도 이 둘을 얻을 수 없다. **두 계층은 대체 관계가 아니다.**
 
 ### Phase 0에서 만들지 않는 것
