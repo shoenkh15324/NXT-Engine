@@ -87,10 +87,10 @@ Instance → Surface → Device → Memory → Swapchain → CommandBuffer → p
 생성된 타깃:
 
 ```text
-nxt_core  nxt_math  nxt_platform  nxt_renderer  nxt_engine  nxt_assets  sandbox
+nxt_core  nxt_math  nxt_platform  nxt_graphics  nxt_renderer  nxt_engine  nxt_assets  sandbox
 ```
 
-`nxt_graphics`는 소스가 아직 없어서 INTERFACE다. A4에서 첫 `.cpp`가 생기면 STATIC으로 전환한다.
+A2 시점에 `nxt_graphics`는 소스가 없어 INTERFACE였다. A4에서 첫 `.cpp`가 생기며 STATIC으로 전환했다.
 
 ### CMake 규칙
 
@@ -172,6 +172,9 @@ public:
 **`Instance`·`Device`·`Swapchain`의 `create()`는 rhi/에 선언만 하고 backend가 정의한다.**
 그래서 factory를 RHI 밖에서 작성할 수 없다 — 규칙이 관례가 아니라 빌드 구조로 강제된다.
 
+`Device`의 생성은 `Instance::createDevice()`가 맡는다. Instance가 Device를 만드는
+유일한 지점이기 때문이다.
+
 Fence를 `unique_ptr`로 만들지 않는 이유는 `frame.md` §5의 두 배열 때문이다.
 
 ```text
@@ -234,7 +237,8 @@ Phase 0의 업로드 버퍼는 아래 조합이면 충분하다. `HostCoherent` 
 없다 — 그 성질이 없으면 CPU 쓰기가 GPU에 반영되지 않는다.
 
 ```cpp
-MemoryProperty::HostVisible | MemoryProperty::HostCoherent | MemoryProperty::TransferDst
+MemoryProperty::HostVisible | MemoryProperty::HostCoherent   // 메모리 성질
+BufferUsage::TransferDst                                      // 버퍼 용도
 ```
 
 `HostVisible`은 PCIe를 지나 CPU가 접근할 수 있게 하고, `HostCoherent`은 그 쓰기를
@@ -298,10 +302,10 @@ MSVC 콘솔에서 한국어 오류 메시지가 깨지면 오류 코드를 함�
 
 백엔드 구현 (`src/nxt/graphics/backends/vulkan/`)
 
-- [ ] `vulkan_types.hpp` — vk:: 타입이 존재하는 유일한 파일
-- [ ] `vulkan_check.hpp` — `VK_CHECK`
+- [x] `vulkan_types.hpp` — vk:: 타입이 존재하는 유일한 파일
+- [x] `vulkan_check.hpp` — `VK_CHECK`
 - [ ] `vulkan_instance.cpp` · `vulkan_device.cpp` · `vulkan_memory.cpp`
-- [ ] `vulkan_swapchain.cpp` · `vulkan_command_buffer.cpp` · `vulkan_fence.cpp`
+- [ ] `vulkan_swapchain.cpp` · `vulkan_command_buffer.cpp` · `vulkan_fence.cpp` · `vulkan_semaphore.cpp`
 - [ ] `vulkan_resource_deletion.cpp`
 
 `vulkan_loader`를 직접 작성하지 않는다. `find_package(Vulkan)`이 준 `Vulkan::Vulkan`을
@@ -317,6 +321,20 @@ MSVC 콘솔에서 한국어 오류 메시지가 깨지면 오류 코드를 함�
 
 `vulkan_types.hpp`만 `vulkan/vulkan.hpp`를 include한다. 다른 어떤 파일도 직접 하지 않는다.
 
+**dispatchable 핸들(Instance · Device · Queue)은 `fromVkHandle`로 옮길 수 없다.** 값이
+포인터라 `static_cast`가 성립하지 않기 때문이다. `reinterpret_cast`를 쓰는 변환을
+instance/device 단계에서 `vulkan_types.hpp`에 추가한다.
+
+**`VK_CHECK`는 `vk::Result`만 받는다.** 값이 있는 호출은 `ResultValue<T>`를 돌려주므로
+먼저 받아 `.result`를 넘기고 `.value`로 값을 꺼낸다. 담긴 값을 버리지 않게 하려는
+의도다 (`VULKAN_HPP_NO_EXCEPTIONS`의 enhanced 함수 반환 형태).
+
+```cpp
+const auto created = vk::createInstance(createInfo);
+VK_CHECK(created.result);
+vk::Instance instance = created.value;
+```
+
 **`memory.hpp`가 별도 계층인 이유.** `SystemAllocator`로 대체되지 않는다.
 
 ```text
@@ -324,7 +342,7 @@ SystemAllocator  →  _aligned_malloc / std::aligned_alloc        →  CPU 가�
 rhi::Memory      →  vkAllocateMemory(memoryTypeBits) + vkMapMemory  →  GPU 메모리
 ```
 
-memory type bits(`DEVICE_LOCAL` `HOST_VISIBLE` `HOST_COHERENT` `TRANSFER_SRC` `TRANSFER_DST`)
+memory type bits(`DEVICE_LOCAL` `HOST_VISIBLE` `HOST_COHERENT` `HOST_CACHED`)
 와 mapping을 다뤄야 한다. `SystemAllocator`를 감싸도 둘 다 얻을 수 없다. **대체 관계가 아니다.**
 
 필요한 버퍼가 1~2개이므로 allocator abstraction은 만들지 않는다. 할당이 많아지는 Phase 2에서 VMA를 검토한다.
@@ -444,7 +462,7 @@ depth는 어차피 Phase 3에 존재한다. 그때 넣으면 Phase 0의 렌더 �
 | `graphics/runtime/` 생존 여부 | 삭제하고 `rhi/`로 통합 | **결정됨 — 삭제.** `frame.md` §3/§7의 `graphics/runtime`은 디렉터리가 아니라 모듈 `nxt_graphics`를 가리키는 표현이다 |
 | namespace 규칙 | flat한 디렉터리는 이름 반복 안 함 (`nxt::math`) | **결정됨 — `nxt::graphics::rhi`.** `rhi.md` §8이 이미 `nxt_graphics::rhi::Memory`로 이름을 확정했다. 백엔드는 `nxt::graphics::vulkan` (`platform::win32` 선례) |
 | graphics 테스트 | Phase 0는 없음 | **결정됨 — 없음.** 검증은 grep 게이트 + 단독 컴파일로 한다. null 백엔드는 요구되지 않았고 그만큼 비싸다 |
-| instance 확장 | `VK_EXT_debug_utils`만 | 미결 |
+| instance 확장 | `VK_EXT_debug_utils`만 | **결정됨.** 검증 레이어는 A6에서 붙인다 |
 | `render pass` 이름 충돌 | RHI는 기술자(descriptor) | **결정됨 — `rhi::RenderPassDesc`.** renderer 쪽 `RenderPass`(개별 패스)와 구분한다 |
 
 ### `frame.md`의 `graphics/runtime` 표기
@@ -453,4 +471,3 @@ depth는 어차피 Phase 3에 존재한다. 그때 넣으면 Phase 0의 렌더 �
 초기화 · 프레임 제출 관리 · present 소유권)은 `rhi.md` §8이 `rhi/`의
 Instance·Device·Swapchain·CommandBuffer·Fence·ResourceDeletion에 이미 배정돼 있다.
 **같은 책임을 부르는 이름이 두 개였다.** `rhi/` 쪽이 이겼으므로 코드는 `rhi/`를 따른다.
-| instance 확장 | `VK_EXT_debug_utils`만 | 미결 |
