@@ -27,9 +27,21 @@ target_include_directories(nxt_graphics PUBLIC "${PROJECT_SOURCE_DIR}/src")
 target_include_directories(nxt_graphics SYSTEM PRIVATE "${Vulkan_INCLUDE_DIR}")
 target_link_libraries(nxt_graphics PRIVATE Vulkan::Vulkan)
 
-# Vulkan-Hpp의 동적 디스패처를 쓴다. vulkan_types.hpp 안에서 #define하면
-# include 순서에 따라 TU마다 값이 갈리므로 타깃에서 준다.
-target_compile_definitions(nxt_graphics PRIVATE VULKAN_HPP_DISPATCH_LOADER_DYNAMIC=1)
+target_compile_definitions(nxt_graphics PRIVATE
+    # Vulkan-Hpp의 동적 디스패처를 쓴다. vulkan_types.hpp 안에서 #define하면
+    # include 순서에 따라 TU마다 값이 갈리므로 타깃에서 준다.
+    VULKAN_HPP_DISPATCH_LOADER_DYNAMIC=1
+
+    # GPU 오류는 복구 불가능하므로 예외를 던지지 않고 종료한다 (rhi.md §7).
+    # 이 정의가 있어야 Vulkan-Hpp 함수가 vk::Result를 돌려주고 VK_CHECK가 성립한다.
+    VULKAN_HPP_NO_EXCEPTIONS
+)
+
+if(WIN32)
+    # Win32 surface를 만들려면 vk::Win32SurfaceCreateInfoKHR와 createWin32SurfaceKHR가
+    # 선언되어야 한다. vulkan.hpp는 이 매크로가 있을 때만 Win32 surface API를 노출한다.
+    target_compile_definitions(nxt_graphics PRIVATE VK_USE_PLATFORM_WIN32_KHR)
+endif()
 
 if(MSVC)
     target_compile_options(nxt_graphics PRIVATE /W4)
