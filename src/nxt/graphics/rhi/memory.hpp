@@ -51,10 +51,6 @@ enum class MemoryProperty : std::uint32_t {
     HostCached = 1u << 2,
     /// @brief CPU 쓰기가 자동으로 GPU에 반영된다. 명시적 flush가 필요 없다.
     HostCoherent = 1u << 3,
-    /// @brief 다른 리소스로 복사하는 원본으로 쓸 수 있다.
-    TransferSrc = 1u << 4,
-    /// @brief 다른 리소스로 복사되는 대상으로 쓸 수 있다.
-    TransferDst = 1u << 5,
 };
 
 /// @brief 두 성질을 합친다.
