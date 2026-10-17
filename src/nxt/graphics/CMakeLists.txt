@@ -65,6 +65,8 @@ target_sources(nxt_graphics
             rhi/rhi.hpp
             rhi/common/handle.hpp
             rhi/common/enums.hpp
+            rhi/core/instance.hpp
+            rhi/core/device.hpp
             rhi/frame/fence.hpp
             rhi/frame/semaphore.hpp
             rhi/resource/memory.hpp
