@@ -35,6 +35,13 @@ target_compile_definitions(nxt_graphics PRIVATE
     # GPU 오류는 복구 불가능하므로 예외를 던지지 않고 종료한다 (rhi.md §7).
     # 이 정의가 있어야 Vulkan-Hpp 함수가 vk::Result를 돌려주고 VK_CHECK가 성립한다.
     VULKAN_HPP_NO_EXCEPTIONS
+
+    # 엔진 이름과 버전은 루트 project()가 단일 출처다. 그래서 코드에 박지 않고
+    # 여기서 주입한다. project() 값은 add_subdirectory로 하위 스코프에 상속된다.
+    NXT_PROJECT_NAME="${PROJECT_NAME}"
+    NXT_PROJECT_VERSION_MAJOR=${PROJECT_VERSION_MAJOR}
+    NXT_PROJECT_VERSION_MINOR=${PROJECT_VERSION_MINOR}
+    NXT_PROJECT_VERSION_PATCH=${PROJECT_VERSION_PATCH}
 )
 
 if(WIN32)
