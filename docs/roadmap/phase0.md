@@ -128,21 +128,35 @@ platform은 `HWND`까지만 준다. `VkSurfaceKHR`를 만드는 일은 graphics�
 - [x] `nxt_core` · `nxt_platform` 링크, `/W4`, `VULKAN_HPP_DISPATCH_LOADER_DYNAMIC=1`
 - [x] `FILE_SET HEADERS`(공개) + `FILE_SET backend_headers`(백엔드) 배선
 - [x] **검증: `nxt_graphics.vcxproj` 생성. `renderer`·`engine`·`sandbox`에 Vulkan include 경로 없음**
+- [x] `rhi/` · `backends/vulkan/`을 `common` · `core` · `frame` · `resource` 4분류로 정리
+- [x] 엔진 이름·버전을 루트 `project()`에서 주입 — `NXT_PROJECT_NAME` · `NXT_PROJECT_VERSION_{MAJOR,MINOR,PATCH}`
 
 공개 헤더 (`src/nxt/graphics/rhi/`)
 
+파일이 늘어나므로 `backends/vulkan/`과 같은 4분류로 나눈다. `rhi.hpp`만 최상위에 둔다.
+
+```text
+common/    어휘 — 모든 헤더가 공유하는 토대
+core/      프로그램 수명 — 인스턴스 · 디바이스
+frame/     프레임 실행과 동기
+resource/  GPU 리소스
+```
+
 - [ ] `rhi.hpp` — umbrella
-- [x] `handle.hpp` — `OpaqueHandle`, `ResourceHandle<Tag>`
-- [x] `enums.hpp` — Format, Topology, PresentMode, LoadOp, StoreOp, IndexType, BufferUsage
-- [x] `memory.hpp` — GPU 메모리, `MemoryProperty`, allocate·free·map·unmap
-- [ ] `instance.hpp` — Instance, Surface
-- [ ] `device.hpp` — Device, Queue
-- [ ] `swapchain.hpp`
-- [x] `semaphore.hpp` — Semaphore (`frame.md` §5가 요구. A4 목록에 누락돼 있었다)
-- [x] `fence.hpp` — create·destroy·wait·reset·isSignaled
-- [ ] `command_buffer.hpp` — CommandBuffer, CommandEncoder, RenderPassDesc
-- [x] `image.hpp` — ImageView (`Image` 자체는 B4)
-- [ ] `resource_deletion.hpp` — fence 기반 지연 파괴
+- [x] `common/handle.hpp` — `OpaqueHandle`, `ResourceHandle<Tag>`
+- [x] `common/enums.hpp` — Format, Topology, PresentMode, LoadOp, StoreOp, IndexType, BufferUsage
+- [x] `resource/memory.hpp` — GPU 메모리, `MemoryProperty`, allocate·free·map·unmap
+- [x] `core/instance.hpp` — Instance, Surface
+- [x] `core/device.hpp` — Device, Queue
+- [ ] `frame/swapchain.hpp`
+- [x] `frame/semaphore.hpp` — Semaphore (`frame.md` §5가 요구. A4 목록에 누락돼 있었다)
+- [x] `frame/fence.hpp` — create·destroy·wait·reset·isSignaled
+- [ ] `frame/command_buffer.hpp` — CommandBuffer, CommandEncoder, RenderPassDesc
+- [x] `resource/image.hpp` — ImageView (`Image` 자체는 B4)
+- [ ] `frame/resource_deletion.hpp` — fence 기반 지연 파괴
+
+**아직 안 한 검증: 헤더 단독 컴파일.** A4 헤더는 지금까지 `backends/vulkan/`이
+include할 때만 컴파일됐다. `/W4 /WX` 단독 컴파일은 A4를 닫을 때 한 번에 돌린다.
 
 ### RHI 타입은 두 패턴을 함께 쓴다
 
@@ -302,11 +316,28 @@ MSVC 콘솔에서 한국어 오류 메시지가 깨지면 오류 코드를 함�
 
 백엔드 구현 (`src/nxt/graphics/backends/vulkan/`)
 
-- [x] `vulkan_types.hpp` — vk:: 타입이 존재하는 유일한 파일
-- [x] `vulkan_check.hpp` — `VK_CHECK`
-- [ ] `vulkan_instance.cpp` · `vulkan_device.cpp` · `vulkan_memory.cpp`
-- [ ] `vulkan_swapchain.cpp` · `vulkan_command_buffer.cpp` · `vulkan_fence.cpp` · `vulkan_semaphore.cpp`
-- [ ] `vulkan_resource_deletion.cpp`
+`rhi/`와 같은 4분류로 나눈다.
+
+```text
+common/    vk:: 경계 — vulkan.hpp를 아는 유일한 파일이 여기 있다
+core/      프로그램 수명 — 인스턴스 · 디바이스
+frame/     프레임 실행과 동기
+resource/  GPU 리소스
+```
+
+- [x] `common/vulkan_types.hpp` — vk:: 타입이 존재하는 유일한 파일
+- [x] `common/vulkan_check.hpp` — `VK_CHECK`
+- [x] `core/vulkan_instance.cpp` (+ `core/vulkan_instance_win32.cpp`) — 플랫폼 분기
+- [ ] `core/vulkan_instance_linux.cpp` — 아직 빈 파일이다. 두 함수의 XCB 구현이 남았다
+- [ ] `core/vulkan_device.cpp` — `core/vulkan_device.hpp`의 선언은 끝났고 구현만 남았다
+- [ ] `resource/vulkan_memory.cpp`
+- [ ] `frame/vulkan_swapchain.cpp` · `frame/vulkan_command_buffer.cpp` · `frame/vulkan_fence.cpp` · `frame/vulkan_semaphore.cpp`
+- [ ] `frame/vulkan_resource_deletion.cpp`
+
+**링크 게이트.** `nxt_graphics`는 STATIC이라 아무도 참조하지 않는 오브젝트를 최종 링크에
+끌어오지 않는다. 그래서 미정의 심볼은 라이브러리 빌드만으로는 드러나지 않는다.
+`rhi::Instance::create()`를 실제로 부르는 임시 TU를 만들어 붙여야 보인다. 지금 남은 것은
+`VulkanDevice::create` · `~VulkanDevice` 둘뿐이고, 둘 다 빈 `core/vulkan_device.cpp` 몫이다.
 
 `vulkan_loader`를 직접 작성하지 않는다. `find_package(Vulkan)`이 준 `Vulkan::Vulkan`을
 링크하고 Vulkan-Hpp의 동적 디스패처를 쓴다. 근거는
@@ -321,9 +352,16 @@ MSVC 콘솔에서 한국어 오류 메시지가 깨지면 오류 코드를 함�
 
 `vulkan_types.hpp`만 `vulkan/vulkan.hpp`를 include한다. 다른 어떤 파일도 직접 하지 않는다.
 
-**dispatchable 핸들(Instance · Device · Queue)은 `fromVkHandle`로 옮길 수 없다.** 값이
-포인터라 `static_cast`가 성립하지 않기 때문이다. `reinterpret_cast`를 쓰는 변환을
-instance/device 단계에서 `vulkan_types.hpp`에 추가한다.
+**64비트에서 Vulkan 핸들은 모두 포인터 타입이다.** `VK_USE_64_BIT_PTR_DEFINES == 1`
+이면 dispatchable(Instance · Device · Queue)과 non-dispatchable(Surface · Image · Buffer)의
+구분 없이 `struct X_T*`다 (`vulkan_core.h`). 그래서 `static_cast`로는 64비트 정수와
+오갈 수 없고, `toVkHandle` · `fromVkHandle` 한 쌍이 `reinterpret_cast`를 쓴다.
+종류별로 변환 함수를 나누지 않는다 — 64비트에서 둘은 같은 코드가 된다.
+
+**동적 디스패처는 정의가 필요한 extern 변수다.** `VULKAN_HPP_DEFAULT_DISPATCHER`가
+가리키는 객체는 `VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE`를 한 TU에서
+한 번 펼쳐야 생긴다 (`vulkan_hpp_macros.hpp`). 그 자리는 디스패처를 초기화하는
+`vulkan_instance.cpp`가 맡는다.
 
 **`VK_CHECK`는 `vk::Result`만 받는다.** 값이 있는 호출은 `ResultValue<T>`를 돌려주므로
 먼저 받아 `.result`를 넘기고 `.value`로 값을 꺼낸다. 담긴 값을 버리지 않게 하려는
@@ -387,17 +425,17 @@ destroy()는 지연 목록에 넣고, 그 리소스를 마지막으로 쓴 프�
 - [ ] `shaders/triangle.vert` · `triangle.frag`
 - [x] CMake 셰이더 컴파일 규칙 — `cmake/CompileShaders.cmake`
 - [ ] `nxt_add_shader`로 SPIR-V 등록
-- [ ] `graphics/rhi/shader.hpp` + `vulkan_shader.cpp`
+- [ ] `graphics/rhi/resource/shader.hpp` + `resource/vulkan_shader.cpp`
 
 ## B3. 파이프라인
 
-- [ ] `graphics/rhi/pipeline.hpp` + `vulkan_pipeline.cpp`
+- [ ] `graphics/rhi/resource/pipeline.hpp` + `resource/vulkan_pipeline.cpp`
   — GraphicsPipeline, VertexLayout, rasterizer 상태
 
 ## B4. 버퍼와 이미지
 
-- [ ] `graphics/rhi/buffer.hpp` + `vulkan_buffer.cpp`
-- [ ] `graphics/rhi/image.hpp` + `vulkan_image.cpp`
+- [ ] `graphics/rhi/resource/buffer.hpp` + `resource/vulkan_buffer.cpp`
+- [ ] `graphics/rhi/resource/image.hpp` + `resource/vulkan_image.cpp`
 
 **깊이 버퍼를 여기서 넣는다.** 삼각형 하나에는 시각적으로 필요 없지만, 나중에 넣으면
 다섯 곳을 다시 건드린다.
@@ -464,6 +502,9 @@ depth는 어차피 Phase 3에 존재한다. 그때 넣으면 Phase 0의 렌더 �
 | graphics 테스트 | Phase 0는 없음 | **결정됨 — 없음.** 검증은 grep 게이트 + 단독 컴파일로 한다. null 백엔드는 요구되지 않았고 그만큼 비싸다 |
 | instance 확장 | `VK_EXT_debug_utils`만 | **결정됨.** 검증 레이어는 A6에서 붙인다 |
 | `render pass` 이름 충돌 | RHI는 기술자(descriptor) | **결정됨 — `rhi::RenderPassDesc`.** renderer 쪽 `RenderPass`(개별 패스)와 구분한다 |
+| 디렉터리 분류 | 파일이 늘면 기능별로 나눈다 | **결정됨 — `common` · `core` · `frame` · `resource`.** `rhi/`와 `backends/vulkan/`이 같은 이름을 쓴다. 한쪽만 다르면 새 파일을 어디에 넣을지 매번 헷갈린다 |
+| 플랫폼 분기 | 파일 분리 | **결정됨 — `vulkan_instance_win32.cpp` · `vulkan_instance_linux.cpp`.** CMake가 이 플랫폼의 하나만 빌드에 넣는다. `#if`로 한 파일에 몰아넣지 않는다 — Linux는 X11 · Wayland 둘을 가질 수 있다 |
+| 엔진 이름·버전 | 코드에 상수로 박기 | **결정됨 — 루트 `project()`에서 주입.** `PROJECT_NAME`이 `NXT`라 `pEngineName`이 `NXT-Engine`에서 `NXT`로 바뀐다. 앱 이름은 앱 몫이라 A6 `InstanceDesc`로 옮긴다 |
 
 ### `frame.md`의 `graphics/runtime` 표기
 
