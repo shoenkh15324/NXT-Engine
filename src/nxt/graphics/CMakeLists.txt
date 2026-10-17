@@ -44,12 +44,6 @@ target_compile_definitions(nxt_graphics PRIVATE
     NXT_PROJECT_VERSION_PATCH=${PROJECT_VERSION_PATCH}
 )
 
-if(WIN32)
-    # Win32 surface를 만들려면 vk::Win32SurfaceCreateInfoKHR와 createWin32SurfaceKHR가
-    # 선언되어야 한다. vulkan.hpp는 이 매크로가 있을 때만 Win32 surface API를 노출한다.
-    target_compile_definitions(nxt_graphics PRIVATE VK_USE_PLATFORM_WIN32_KHR)
-endif()
-
 if(MSVC)
     target_compile_options(nxt_graphics PRIVATE /W4)
 else()
