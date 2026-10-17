@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <nxt/core/diagnostics/assert.hpp>
 #include <nxt/graphics/rhi/common/enums.hpp>
+#include <nxt/graphics/rhi/common/handle.hpp>
 #include <nxt/graphics/rhi/resource/memory.hpp>
 #include <vulkan/vulkan.hpp>
 
@@ -187,8 +188,9 @@ inline vk::MemoryPropertyFlags toVulkan(rhi::MemoryProperty property) noexcept {
 /**
  * @brief ResourceHandle이 담은 값을 vk 핸들로 되돌린다.
  *
- * @note 비-디스패치 핸들 전용이다. dispatchable 핸들(Instance, Device)을
- *       넘기면 값이 포인터라 static_cast가 컴파일 오류를 낸다 — 의도된 방어다.
+ * 64비트에서 Vulkan 핸들은 디스패치 가능 여부와 상관없이 모두 포인터 타입이다
+ * (VK_USE_64_BIT_PTR_DEFINES == 1 — vulkan_core.h). 그래서 정수에서 핸들로 가려면
+ * reinterpret_cast를 써야 한다. static_cast로는 컴파일되지 않는다.
  *
  * @tparam VkHandle 되돌릴 vk 핸들 타입.
  * @tparam Tag      핸들의 종류 태그.
@@ -198,13 +200,14 @@ inline vk::MemoryPropertyFlags toVulkan(rhi::MemoryProperty property) noexcept {
 template <typename VkHandle, typename Tag>
 [[nodiscard]]
 inline VkHandle toVkHandle(rhi::ResourceHandle<Tag> handle) noexcept {
-    return VkHandle{static_cast<typename VkHandle::CType>(handle.value())};
+    return VkHandle{reinterpret_cast<typename VkHandle::CType>(handle.value())};
 }
 
 /**
  * @brief vk 핸들을 종류가 구분되는 rhi 핸들로 감싼다.
  *
- * @note 비-디스패치 핸들 전용이다 (toVkHandle과 같은 이유).
+ * 핸들을 64비트 값으로 보관한다. 포인터를 정수로 바꾸는 길은 reinterpret_cast
+ * 뿐이다 (toVkHandle과 같은 이유).
  *
  * @tparam Tag      감쌀 핸들의 종류 태그.
  * @tparam VkHandle 감쌀 vk 핸들 타입.
@@ -215,7 +218,7 @@ template <typename Tag, typename VkHandle>
 [[nodiscard]]
 inline rhi::ResourceHandle<Tag> fromVkHandle(VkHandle handle) noexcept {
     return rhi::ResourceHandle<Tag>::fromValue(
-        static_cast<std::uint64_t>(static_cast<typename VkHandle::CType>(handle)));
+        reinterpret_cast<std::uint64_t>(static_cast<typename VkHandle::CType>(handle)));
 }
 
 } // namespace nxt::graphics::vulkan
