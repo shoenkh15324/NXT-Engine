@@ -1,7 +1,7 @@
 #pragma once
 
 #include <nxt/core/diagnostics/assert.hpp>
-#include <nxt/graphics/backends/vulkan/vulkan_types.hpp>
+#include <nxt/graphics/backends/vulkan/common/vulkan_types.hpp>
 #include <string>
 
 namespace nxt::graphics::vulkan {

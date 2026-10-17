@@ -67,9 +67,9 @@ Phase 0 단일 큐로 불가능해지는 시점"이다. 그때 측정하고 결�
 **`vk::`가 등장할 수 있는 파일은 `src/nxt/graphics/backends/vulkan/` 아래뿐이다.**
 
 ```text
-rhi/swapchain.hpp           VkSwapchainKHR를 쓰지 않는다
-rhi/pipeline.hpp            VkPipeline를 쓰지 않는다
-backends/vulkan/vulkan_types.hpp    vk:: 타입이 존재하는 유일한 파일
+rhi/frame/swapchain.hpp                  VkSwapchainKHR를 쓰지 않는다
+rhi/resource/pipeline.hpp                VkPipeline를 쓰지 않는다
+backends/vulkan/common/vulkan_types.hpp  vk:: 타입이 존재하는 유일한 파일
 ```
 
 `vulkan_types.hpp`는 backend 구현부만 include한다. 헤더이므로 include 누락을 막으려면
@@ -92,12 +92,20 @@ RHI 내부에서는 backend-private 타입(핸들)을 쓰지 않는다. 필요�
 ```text
 src/nxt/graphics/
     rhi/                 공개 API. Vk를 모른다
+        common/          어휘 — handle · enums
+        core/            인스턴스 · 디바이스
+        frame/           프레임 실행과 동기
+        resource/        GPU 리소스
     backends/
         vulkan/          Vulkan 구현. Vk를 안다
+            common/      vk:: 경계 — vulkan_types · vulkan_check
+            core/        인스턴스(플랫폼 분기) · 디바이스
+            frame/       스왑체인 · 커맨드버퍼 · 동기
+            resource/    GPU 리소스
 ```
 
-- `rhi/*.hpp`는 헤더 전용으로 충분하다. 상태는 backend 구현체가 소유한다.
-- `backends/vulkan/`이 `rhi/*.hpp`를 include하는 것은 허용된다. 반대는 금지한다.
+- `rhi/`는 헤더 전용으로 충분하다. 상태는 backend 구현체가 소유한다.
+- `backends/vulkan/`이 `rhi/`의 헤더를 include하는 것은 허용된다. 반대는 금지한다.
 - Vulkan 헤더(`vulkan/vulkan.hpp`)는 `backends/vulkan/`만 include한다.
   전역 include 경로에 Vulkan을 노출하지 않는다.
 
