@@ -2,7 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <nxt/graphics/rhi/handle.hpp>
+#include <nxt/graphics/rhi/common/handle.hpp>
 
 namespace nxt::graphics::rhi {
 

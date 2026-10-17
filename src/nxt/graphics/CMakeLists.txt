@@ -51,16 +51,22 @@ endif()
 
 # 공개 헤더. Vk 타입이 새지 않는지 확인할 수 있도록 PUBLIC으로 내보낸다.
 # 아직 없는 파일은 적지 않는다. 없는 파일을 적으면 configure가 실패한다.
+#
+# 파일이 늘어나므로 backends/vulkan/과 같은 4분류로 나눈다.
+#   common/    어휘 — handle · enums
+#   core/      프로그램 수명 — instance · device
+#   frame/     프레임 실행과 동기 — fence · semaphore (+ swapchain · command_buffer)
+#   resource/  GPU 리소스 — memory · image (+ buffer · shader · pipeline)
 target_sources(nxt_graphics
     PUBLIC
         FILE_SET HEADERS
         BASE_DIRS "${PROJECT_SOURCE_DIR}/src"
         FILES
             rhi/rhi.hpp
-            rhi/handle.hpp
-            rhi/semaphore.hpp
-            rhi/image.hpp
-            rhi/enums.hpp
-            rhi/fence.hpp
-            rhi/memory.hpp
+            rhi/common/handle.hpp
+            rhi/common/enums.hpp
+            rhi/frame/fence.hpp
+            rhi/frame/semaphore.hpp
+            rhi/resource/memory.hpp
+            rhi/resource/image.hpp
 )

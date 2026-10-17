@@ -2,8 +2,8 @@
 
 #include <cstdint>
 #include <nxt/core/diagnostics/assert.hpp>
-#include <nxt/graphics/rhi/enums.hpp>
-#include <nxt/graphics/rhi/memory.hpp>
+#include <nxt/graphics/rhi/common/enums.hpp>
+#include <nxt/graphics/rhi/resource/memory.hpp>
 #include <vulkan/vulkan.hpp>
 
 // rhi 타입과 Vulkan 타입 사이의 유일한 번역 지점이다.
