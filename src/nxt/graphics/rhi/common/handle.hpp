@@ -8,8 +8,10 @@ namespace nxt::graphics::rhi {
 /**
  * @brief 백엔드 리소스를 가리키는 의미 없는 64비트 값이다.
  *
- * Vulkan에서 리소스 핸들은 부호 없는 정수 리퀀스 번호다. NXT는 그 값이 무엇을
- * 뜻하는지 알지 않으며, 해석은 backend 구현부에만 둔다 (rhi.md §4).
+ * Vulkan 핸들은 64비트로 표현되는 불투명한 값이다. 64비트에서는 디스패치 가능
+ * 여부와 상관없이 포인터 타입이므로 정수로 보관하려면 변환이 필요하다
+ * (backends/vulkan/vulkan_types.hpp). NXT는 그 값이 무엇을 뜻하는지 알지 않으며,
+ * 해석은 backend 구현부에만 둔다 (rhi.md §4).
  *
  * @note 리소스 종류를 표현하려면 이 타입이 아니라 ResourceHandle<Tag>를 쓴다.
  */
