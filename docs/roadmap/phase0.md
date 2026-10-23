@@ -126,6 +126,9 @@ platform은 `HWND`까지만 준다. `VkSurfaceKHR`를 만드는 일은 graphics�
 구현한다. `Instance::create()` 경로가 링크되면 끝난다. GPU 리소스와 프레임 동기는
 A5다 — 여기서는 만들지 않는다.
 
+플랫폼은 **Win32만 대상**이다. Linux surface 백엔드는 미루고 자리만 남긴다 (아래
+"백엔드 구현" 참조).
+
 구조와 CMake 배선 (완료)
 
 - [x] `graphics/runtime/` 삭제. `rhi/`로 통합한다 (아래 "착수 시 결정할 것" 참조)
@@ -258,8 +261,10 @@ resource/  GPU 리소스
 - [x] `common/vulkan_types.hpp` — vk:: 타입이 존재하는 유일한 파일
 - [x] `common/vulkan_check.hpp` — `VK_CHECK`
 - [x] `core/vulkan_instance.cpp` (+ `core/vulkan_instance_win32.cpp`) — 플랫폼 분기
-- [ ] `core/vulkan_instance_linux.cpp` — 아직 빈 파일이다. 두 함수의 XCB 구현이 남았다
 - [ ] `core/vulkan_device.cpp` — `core/vulkan_device.hpp`의 선언은 끝났고 구현만 남았다
+
+`core/vulkan_instance_linux.cpp`는 **보류**다. 지금은 Win32만 대상이라 XCB 구현을
+미룬다 — 빈 파일과 CMake의 `UNIX` 분기는 나중에 붙일 자리로만 남긴다.
 
 `resource/` · `frame/` 구현은 A5다.
 
@@ -517,7 +522,7 @@ depth는 어차피 Phase 3에 존재한다. 그때 넣으면 Phase 0의 렌더 �
 - Descriptor set · bindless · async compute → Phase 4 이후
 - Material / lighting → Phase 3
 - SIMD · Vulkan 파이프라인 고도화 → 측정 없이 도입하지 않는다
-- Linux backend → Vulkan 로더로 교체 가능한지 확인되면 그때
+- Linux backend → **보류.** Phase 0는 Win32만 대상이다. 착수 조건은 Vulkan 로더로 교체 가능한지 확인되는 때
 
 ## 착수 시 결정할 것
 
@@ -529,7 +534,7 @@ depth는 어차피 Phase 3에 존재한다. 그때 넣으면 Phase 0의 렌더 �
 | instance 확장 | `VK_EXT_debug_utils`만 | **결정됨.** 검증 레이어는 A6에서 붙인다 |
 | `render pass` 이름 충돌 | RHI는 기술자(descriptor) | **결정됨 — `rhi::RenderPassDesc`.** renderer 쪽 `RenderPass`(개별 패스)와 구분한다 |
 | 디렉터리 분류 | 파일이 늘면 기능별로 나눈다 | **결정됨 — `common` · `core` · `frame` · `resource`.** `rhi/`와 `backends/vulkan/`이 같은 이름을 쓴다. 한쪽만 다르면 새 파일을 어디에 넣을지 매번 헷갈린다 |
-| 플랫폼 분기 | 파일 분리 | **결정됨 — `vulkan_instance_win32.cpp` · `vulkan_instance_linux.cpp`.** CMake가 이 플랫폼의 하나만 빌드에 넣는다. `#if`로 한 파일에 몰아넣지 않는다 — Linux는 X11 · Wayland 둘을 가질 수 있다 |
+| 플랫폼 분기 | 파일 분리 | **결정됨 — `vulkan_instance_win32.cpp` · `vulkan_instance_linux.cpp`.** CMake가 이 플랫폼의 하나만 빌드에 넣는다. `#if`로 한 파일에 몰아넣지 않는다 — Linux는 X11 · Wayland 둘을 가질 수 있다. **구현은 Win32만 한다** — Linux는 자리만 두고 보류라 `vulkan_instance_linux.cpp`는 빈 파일이다 |
 | 엔진 이름·버전 | 코드에 상수로 박기 | **결정됨 — 루트 `project()`에서 주입.** `PROJECT_NAME`이 `NXT`라 `pEngineName`이 `NXT-Engine`에서 `NXT`로 바뀐다. 앱 이름은 앱 몫이라 A7 `InstanceDesc`로 옮긴다 |
 
 ### `frame.md`의 `graphics/runtime` 표기
