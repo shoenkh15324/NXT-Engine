@@ -13,7 +13,7 @@
 | **A1 환경** | 🟢 완료. SDK 1.4.363.0 설치, `find_package(Vulkan)` 동작 확인 |
 | **A2 스켈레톤 배선** | 🟢 완료. Vulkan 소스 0개로 target 7개 생성, 빌드·테스트 통과 |
 | **A3 창** | 🟢 완료. `Window` interface + `Win32Window` (HWND) |
-| **A4 RHI 경계와 수명** | 🟡 착수. 4분류·`common`·`core` 헤더 + instance 백엔드 완료. `vulkan_device.cpp` 남음 |
+| **A4 RHI 경계와 수명** | 🟢 완료. `rhi/` 공개 헤더 + `instance`·`device` 백엔드, 링크 게이트 0, 헤더 단독 `/W4 /WX` 통과. Linux는 보류 |
 | **A5 RHI 자원과 동기** | 🟡 착수. `memory`·`image`·`fence`·`semaphore` 헤더 완료. 백엔드 6개 남음 |
 | **A6 프레임 루프** | 🔴 `engine/frame_loop.*` 0바이트 |
 | **A7 0-A 검증** | 🔴 A6가 끝나야 시작한다 |
@@ -151,7 +151,7 @@ frame/     프레임 실행과 동기
 resource/  GPU 리소스
 ```
 
-- [ ] `rhi.hpp` — umbrella
+- [x] `rhi.hpp` — umbrella. 공개 헤더를 모으는 입구
 - [x] `common/handle.hpp` — `OpaqueHandle`, `ResourceHandle<Tag>`
 - [x] `common/enums.hpp` — Format, Topology, PresentMode, LoadOp, StoreOp, IndexType, BufferUsage
 - [x] `core/instance.hpp` — Instance, Surface
@@ -159,8 +159,9 @@ resource/  GPU 리소스
 
 `resource/` · `frame/` 헤더는 A5다.
 
-**아직 안 한 검증: 헤더 단독 컴파일.** A4 헤더는 지금까지 `backends/vulkan/`이
-include할 때만 컴파일됐다. `/W4 /WX` 단독 컴파일은 A4를 닫을 때 한 번에 돌린다.
+**검증 완료: 헤더 단독 컴파일.** A4를 닫으며 `rhi.hpp`를 포함한 공개 헤더 5개를
+각각 단독 TU로 `/W4 /WX` 컴파일해 자기 완결성을 확인했다. 그 전까지 이 헤더들은
+`backends/vulkan/`이 include할 때만 컴파일되고 있었다.
 
 ### RHI 타입은 두 패턴을 함께 쓴다
 
@@ -261,7 +262,7 @@ resource/  GPU 리소스
 - [x] `common/vulkan_types.hpp` — vk:: 타입이 존재하는 유일한 파일
 - [x] `common/vulkan_check.hpp` — `VK_CHECK`
 - [x] `core/vulkan_instance.cpp` (+ `core/vulkan_instance_win32.cpp`) — 플랫폼 분기
-- [ ] `core/vulkan_device.cpp` — `core/vulkan_device.hpp`의 선언은 끝났고 구현만 남았다
+- [x] `core/vulkan_device.cpp` — 물리 디바이스·queue family 선택, 논리 디바이스 생성
 
 `core/vulkan_instance_linux.cpp`는 **보류**다. 지금은 Win32만 대상이라 XCB 구현을
 미룬다 — 빈 파일과 CMake의 `UNIX` 분기는 나중에 붙일 자리로만 남긴다.
@@ -270,8 +271,10 @@ resource/  GPU 리소스
 
 **링크 게이트.** `nxt_graphics`는 STATIC이라 아무도 참조하지 않는 오브젝트를 최종 링크에
 끌어오지 않는다. 그래서 미정의 심볼은 라이브러리 빌드만으로는 드러나지 않는다.
-`rhi::Instance::create()`를 실제로 부르는 임시 TU를 만들어 붙여야 보인다. 지금 남은 것은
-`VulkanDevice::create` · `~VulkanDevice` 둘뿐이고, 둘 다 빈 `core/vulkan_device.cpp` 몫이다.
+`rhi::Instance::create()`를 실제로 부르는 임시 TU를 만들어 붙여야 보인다. A4를 닫으며
+이 게이트가 0이 됐다 — 창 → `Instance::create()` → `createSurface()` → `createDevice()`
+경로가 끝에서 끝까지 링크된다. `frame/` · `resource/` 심볼은 A5에서 채우고, 그때도
+같은 방법으로 각 심볼을 참조해 확인한다.
 
 `vulkan_loader`를 직접 작성하지 않는다. `find_package(Vulkan)`이 준 `Vulkan::Vulkan`을
 링크하고 Vulkan-Hpp의 동적 디스패처를 쓴다. 근거는
