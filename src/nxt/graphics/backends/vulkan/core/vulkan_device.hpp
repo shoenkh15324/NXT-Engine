@@ -72,4 +72,21 @@ private:
     vk::Queue presentQueue_{};
 };
 
+/**
+ * @brief rhi::Device를 VulkanDevice로 되돌린다.
+ *
+ * A5의 자유 함수(memory · fence · semaphore)는 선언이 rhi/에 있고 정의가 이
+ * 백엔드에 있다. 그래서 추상 Device에서 구체 타입을 되찾는 통로가 하나 필요하다.
+ * 호출부마다 캐스트를 흩뿌리지 않으려고 여기 한 곳에 둔다.
+ *
+ * @note Release에서는 NXT_ASSERT가 사라져 static_cast만 남는다. dynamic_cast는
+ *       Debug에서만 평가된다 — 컴파일 타임에 아는 사실을 매 호출 런타임에
+ *       되찾지 않기 위해서다. 그래서 Release 비용은 0이다.
+ *
+ * @param[in] device 확인할 device.
+ * @return 같은 객체를 VulkanDevice로 본 참조.
+ */
+[[nodiscard]]
+const VulkanDevice& toVulkanDevice(const rhi::Device& device) noexcept;
+
 } // namespace nxt::graphics::vulkan
