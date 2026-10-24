@@ -115,4 +115,9 @@ rhi::Queue VulkanDevice::presentQueue() const noexcept {
     return fromVkHandle<rhi::QueueTag>(presentQueue_);
 }
 
+const VulkanDevice& toVulkanDevice(const rhi::Device& device) noexcept {
+    NXT_ASSERT_MSG(dynamic_cast<const VulkanDevice*>(&device) != nullptr, "Vulkan 백엔드가 아닌 Device를 넘겼다.");
+    return static_cast<const VulkanDevice&>(device);
+}
+
 } // namespace nxt::graphics::vulkan
