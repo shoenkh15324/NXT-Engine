@@ -111,7 +111,7 @@ void freeMemory(const Device& device, const Memory& memory);
  * @param[in] offset 메모리 안에서 매핑을 시작할 바이트 오프셋.
  * @param[in] size 매핑할 바이트 수.
  *
- * @return CPU가 접근할 수 있는 주소. 실패하면 nullptr.
+ * @return CPU가 접근할 수 있는 주소. 실패하면 종료한다 (rhi.md §7).
  */
 [[nodiscard]]
 void* mapMemory(const Device& device, const Memory& memory, std::uint64_t offset, std::size_t size);
