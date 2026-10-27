@@ -14,7 +14,7 @@
 | **A2 스켈레톤 배선** | 🟢 완료. Vulkan 소스 0개로 target 7개 생성, 빌드·테스트 통과 |
 | **A3 창** | 🟢 완료. `Window` interface + `Win32Window` (HWND) |
 | **A4 RHI 경계와 수명** | 🟢 완료. `rhi/` 공개 헤더 + `instance`·`device` 백엔드, 링크 게이트 0, 헤더 단독 `/W4 /WX` 통과. Linux는 보류 |
-| **A5 RHI 자원과 동기** | 🟡 착수. `memory`·`image`·`fence`·`semaphore` 헤더 완료. 백엔드 6개 남음 |
+| **A5 RHI 자원과 동기** | 🟡 착수. `memory`·`image`·`fence`·`semaphore`·`swapchain` 헤더 완료. `memory`·`fence`·`semaphore` 백엔드 완료. `swapchain`·`command_buffer`·`resource_deletion` 백엔드 3개 남음 |
 | **A6 프레임 루프** | 🔴 `engine/frame_loop.*` 0바이트 |
 | **A7 0-A 검증** | 🔴 A6가 끝나야 시작한다 |
 | **B 삼각형** | 🔴 미착수 |
@@ -324,7 +324,7 @@ GPU 리소스(`resource/`)와 프레임 동기(`frame/`)를 붙인다. 이 단�
 - [x] `resource/image.hpp` — ImageView (`Image` 자체는 B4)
 - [x] `frame/fence.hpp` — create·destroy·wait·reset·isSignaled
 - [x] `frame/semaphore.hpp` — Semaphore (`frame.md` §5가 요구. 처음 스파인 목록에 누락돼 있었다)
-- [ ] `frame/swapchain.hpp`
+- [x] `frame/swapchain.hpp`
 - [ ] `frame/command_buffer.hpp` — CommandBuffer, CommandEncoder, RenderPassDesc
 - [ ] `frame/resource_deletion.hpp` — fence 기반 지연 파괴
 
@@ -401,8 +401,8 @@ B4가 깊이 버퍼를 앞당긴 것과 같은 논리다.
 
 백엔드 구현 (`src/nxt/graphics/backends/vulkan/`)
 
-- [ ] `resource/vulkan_memory.cpp`
-- [ ] `frame/vulkan_fence.cpp` · `frame/vulkan_semaphore.cpp`
+- [x] `resource/vulkan_memory.cpp`
+- [x] `frame/vulkan_fence.cpp` · `frame/vulkan_semaphore.cpp`
 - [ ] `frame/vulkan_swapchain.cpp`
 - [ ] `frame/vulkan_command_buffer.cpp`
 - [ ] `frame/vulkan_resource_deletion.cpp`
