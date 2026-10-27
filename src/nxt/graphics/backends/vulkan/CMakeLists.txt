@@ -49,6 +49,7 @@ target_sources(nxt_graphics
             common/vulkan_check.hpp
             core/vulkan_instance.hpp
             core/vulkan_device.hpp
+            frame/vulkan_swapchain.hpp
 
     PRIVATE
         core/vulkan_instance.cpp
