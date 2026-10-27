@@ -10,3 +10,8 @@
 #include <nxt/graphics/rhi/common/handle.hpp>
 #include <nxt/graphics/rhi/core/device.hpp>
 #include <nxt/graphics/rhi/core/instance.hpp>
+#include <nxt/graphics/rhi/frame/fence.hpp>
+#include <nxt/graphics/rhi/frame/semaphore.hpp>
+#include <nxt/graphics/rhi/frame/swapchain.hpp>
+#include <nxt/graphics/rhi/resource/image.hpp>
+#include <nxt/graphics/rhi/resource/memory.hpp>
