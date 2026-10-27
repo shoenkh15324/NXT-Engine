@@ -1,4 +1,5 @@
 #include <cstdint>
+#include <cstring>
 #include <nxt/core/diagnostics/assert.hpp>
 #include <nxt/core/diagnostics/log.hpp>
 #include <nxt/graphics/backends/vulkan/common/vulkan_check.hpp>
@@ -68,6 +69,32 @@ DeviceSelection selectDevice(vk::Instance instance, vk::SurfaceKHR surface) {
         {"queue family", "graphics와 present를 함께 지원하는 queue family가 없다.", __FILE__, __func__, __LINE__});
 }
 
+/**
+ * @brief 물리 디바이스가 디바이스 확장을 지원하는지 확인한다.
+ *
+ * 인스턴스 확장(VK_KHR_surface)과 디바이스 확장(VK_KHR_swapchain)은 다른 목록이다.
+ * 지원하지 않는 확장을 켜면 vkCreateDevice가 VK_ERROR_EXTENSION_NOT_PRESENT로
+ * 실패하는데, 그 시점에는 어느 확장이 문제인지 알 수 없다. 그래서 먼저 확인해
+ * 이름을 남긴다 — GPU 오류는 복구 불가능하므로 로그가 유일한 단서다 (rhi.md §7).
+ *
+ * @param[in] physicalDevice 확인할 디바이스.
+ * @param[in] name           필요한 확장 이름.
+ */
+void requireDeviceExtension(vk::PhysicalDevice physicalDevice, const char* name) {
+    const auto enumerated = physicalDevice.enumerateDeviceExtensionProperties();
+    VK_CHECK(enumerated.result);
+
+    for (const vk::ExtensionProperties& extension : enumerated.value) {
+        if (std::strcmp(extension.extensionName.data(), name) == 0) {
+            return;
+        }
+    }
+
+    NXT_LOG_ERROR(Graphics, Vulkan, "device extension not supported: {}", std::string_view{name});
+    ::nxt::core::diag::reportAssertFailure(
+        {"device extension", "필요한 device 확장을 지원하지 않는 GPU이다.", __FILE__, __func__, __LINE__});
+}
+
 } // namespace
 
 std::unique_ptr<VulkanDevice> VulkanDevice::create(vk::Instance instance, vk::SurfaceKHR surface) {
@@ -79,11 +106,18 @@ std::unique_ptr<VulkanDevice> VulkanDevice::create(vk::Instance instance, vk::Su
     queueInfo.queueCount = 1;
     queueInfo.pQueuePriorities = &priority;
 
-    // extension과 feature는 필요해질 때 넣는다 (CODING_RULES.md §20). VK_KHR_swapchain은
-    // A6에서 스왑체인을 만들 때 추가한다 (rhi.md §8).
+    // VK_KHR_swapchain은 디바이스 확장이다. A5에서 swapchain을 만들기 시작하므로
+    // 여기서 켠다 (rhi.md §8). 확장이 없으면 vkCreateDevice가 실패하는데 그때는
+    // 원인을 알 수 없으므로 먼저 지원 여부를 확인한다.
+    requireDeviceExtension(selection.physicalDevice, vk::KHRSwapchainExtensionName);
+
+    const char* const enabledExtensions[] = {vk::KHRSwapchainExtensionName};
+
     vk::DeviceCreateInfo createInfo{};
     createInfo.queueCreateInfoCount = 1;
     createInfo.pQueueCreateInfos = &queueInfo;
+    createInfo.enabledExtensionCount = 1;
+    createInfo.ppEnabledExtensionNames = enabledExtensions;
 
     const auto created = selection.physicalDevice.createDevice(createInfo);
     VK_CHECK(created.result);
