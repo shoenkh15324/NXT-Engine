@@ -70,6 +70,7 @@ target_sources(nxt_graphics
             rhi/core/device.hpp
             rhi/frame/fence.hpp
             rhi/frame/semaphore.hpp
+            rhi/frame/swapchain.hpp
             rhi/resource/memory.hpp
             rhi/resource/image.hpp
 )
