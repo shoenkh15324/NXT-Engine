@@ -14,7 +14,7 @@
 | **A2 스켈레톤 배선** | 🟢 완료. Vulkan 소스 0개로 target 7개 생성, 빌드·테스트 통과 |
 | **A3 창** | 🟢 완료. `Window` interface + `Win32Window` (HWND) |
 | **A4 RHI 경계와 수명** | 🟢 완료. `rhi/` 공개 헤더 + `instance`·`device` 백엔드, 링크 게이트 0, 헤더 단독 `/W4 /WX` 통과. Linux는 보류 |
-| **A5 RHI 자원과 동기** | 🟡 착수. `memory`·`image`·`fence`·`semaphore`·`swapchain` 헤더 완료. `memory`·`fence`·`semaphore` 백엔드 완료. `swapchain`·`command_buffer`·`resource_deletion` 백엔드 3개 남음 |
+| **A5 RHI 자원과 동기** | 🟡 착수. `memory`·`image`·`fence`·`semaphore`·`swapchain`·`command_buffer` 헤더 완료. `memory`·`fence`·`semaphore`·`swapchain`·`command_buffer` 백엔드 완료. `resource_deletion` 백엔드 1개 남음 |
 | **A6 프레임 루프** | 🔴 `engine/frame_loop.*` 0바이트 |
 | **A7 0-A 검증** | 🔴 A6가 끝나야 시작한다 |
 | **B 삼각형** | 🔴 미착수 |
@@ -325,7 +325,7 @@ GPU 리소스(`resource/`)와 프레임 동기(`frame/`)를 붙인다. 이 단�
 - [x] `frame/fence.hpp` — create·destroy·wait·reset·isSignaled
 - [x] `frame/semaphore.hpp` — Semaphore (`frame.md` §5가 요구. 처음 스파인 목록에 누락돼 있었다)
 - [x] `frame/swapchain.hpp`
-- [ ] `frame/command_buffer.hpp` — CommandBuffer, CommandEncoder, RenderPassDesc
+- [x] `frame/command_buffer.hpp` — CommandBuffer, CommandEncoder, RenderPassDesc
 - [ ] `frame/resource_deletion.hpp` — fence 기반 지연 파괴
 
 ### Semaphore에 단독 대기 연산이 없다
@@ -367,6 +367,18 @@ vkFreeMemory(device, ...)           vkResetFences(device, ...)
 `class Device;` 전방선언만으로 충분하므로 `fence.hpp`·`semaphore.hpp`·`memory.hpp`은
 `device.hpp`를 include하지 않는다. 세 파일은 서로에게도 의존하지 않는 리프다.
 
+### Command pool은 디바이스가 하나 소유한다
+
+`CommandBuffer` 핸들은 값 하나라 pool을 품을 수 없다. 백엔드가 pool을 대신 들고
+있으면 "누가 소유·파괴하는가"가 코드에 드러나지 않으므로(§9) 디바이스가 갖는다.
+스레드도 큐도 하나뿐이라 pool을 나눌 이유가 없고, 디바이스보다 먼저 파괴한다.
+
+`CommandEncoder`는 `create()`가 `unique_ptr`로 돌려준다. render pass와 framebuffer를
+begin/end 사이에 들고 있어야 하는데 `vk::` 타입은 `rhi/` 헤더에 올 수 없기 때문에
+`Swapchain`과 같은 이유로 자체 상태를 갖는다. 이 중 render pass는 형식에만 묶여
+재사용하고, framebuffer는 특정 image view에 묶여 swapchain 재생성마다 무효가 되므로
+pass마다 만들고 버린다.
+
 ### Memory는 CPU 할당자와 대체 관계가 아니다
 
 ```text
@@ -403,8 +415,8 @@ B4가 깊이 버퍼를 앞당긴 것과 같은 논리다.
 
 - [x] `resource/vulkan_memory.cpp`
 - [x] `frame/vulkan_fence.cpp` · `frame/vulkan_semaphore.cpp`
-- [ ] `frame/vulkan_swapchain.cpp`
-- [ ] `frame/vulkan_command_buffer.cpp`
+- [x] `frame/vulkan_swapchain.cpp`
+- [x] `frame/vulkan_command_buffer.cpp`
 - [ ] `frame/vulkan_resource_deletion.cpp`
 
 **`memory.hpp`가 별도 계층인 이유.** `SystemAllocator`로 대체되지 않는다.
