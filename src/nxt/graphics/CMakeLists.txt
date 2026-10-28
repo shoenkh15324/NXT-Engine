@@ -71,6 +71,7 @@ target_sources(nxt_graphics
             rhi/frame/fence.hpp
             rhi/frame/semaphore.hpp
             rhi/frame/swapchain.hpp
+            rhi/frame/command_buffer.hpp
             rhi/resource/memory.hpp
             rhi/resource/image.hpp
 )
