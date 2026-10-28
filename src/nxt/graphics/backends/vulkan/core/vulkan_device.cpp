@@ -127,17 +127,32 @@ std::unique_ptr<VulkanDevice> VulkanDevice::create(vk::Instance instance, vk::Su
     const vk::Queue graphicsQueue = device.getQueue(selection.queueFamily, 0);
     const vk::Queue presentQueue = device.getQueue(selection.queueFamily, 0);
 
+    // 커맨드 버퍼는 pool에서 꺼낸다. 스레드도 큐도 하나라 pool을 나눌 이유가 없다
+    // (rhi.md §8). eResetCommandBuffer는 매 프레임 같은 버퍼를 다시 기록하기 위한
+    // 것이다 (frame.md §5).
+    vk::CommandPoolCreateInfo poolInfo{};
+    poolInfo.flags = vk::CommandPoolCreateFlagBits::eResetCommandBuffer;
+    poolInfo.queueFamilyIndex = selection.queueFamily;
+
+    const auto pool = device.createCommandPool(poolInfo);
+    VK_CHECK(pool.result);
+
     // make_unique는 private 생성자를 못 부른다. 여기서만 new를 쓴다.
     return std::unique_ptr<VulkanDevice>(
-        new VulkanDevice(selection.physicalDevice, device, graphicsQueue, presentQueue));
+        new VulkanDevice(selection.physicalDevice, device, pool.value, graphicsQueue, presentQueue));
 }
 
-VulkanDevice::VulkanDevice(vk::PhysicalDevice physicalDevice, vk::Device device, vk::Queue graphicsQueue,
-                           vk::Queue presentQueue) noexcept
-    : physicalDevice_{physicalDevice}, device_{device}, graphicsQueue_{graphicsQueue}, presentQueue_{presentQueue} {}
+VulkanDevice::VulkanDevice(vk::PhysicalDevice physicalDevice, vk::Device device, vk::CommandPool commandPool,
+                           vk::Queue graphicsQueue, vk::Queue presentQueue) noexcept
+    : physicalDevice_{physicalDevice},
+      device_{device},
+      graphicsQueue_{graphicsQueue},
+      presentQueue_{presentQueue},
+      commandPool_{commandPool} {}
 
 VulkanDevice::~VulkanDevice() {
-    // queue는 디바이스가 소유하므로 함께 사라진다. 따로 파괴하지 않는다.
+    // queue는 디바이스가 소유하므로 함께 사라진다. pool은 디바이스보다 먼저 파괴한다.
+    device_.destroyCommandPool(commandPool_);
     device_.destroy();
 }
 

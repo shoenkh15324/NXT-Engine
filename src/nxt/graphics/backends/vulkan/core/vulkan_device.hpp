@@ -55,9 +55,15 @@ public:
         return physicalDevice_;
     }
 
+    /// @brief backend 구현부가 커맨드 버퍼를 꺼낼 pool을 얻는 통로이다 (command_buffer).
+    [[nodiscard]]
+    vk::CommandPool commandPool() const noexcept {
+        return commandPool_;
+    }
+
 private:
-    VulkanDevice(vk::PhysicalDevice physicalDevice, vk::Device device, vk::Queue graphicsQueue,
-                 vk::Queue presentQueue) noexcept;
+    VulkanDevice(vk::PhysicalDevice physicalDevice, vk::Device device, vk::CommandPool commandPool,
+                 vk::Queue graphicsQueue, vk::Queue presentQueue) noexcept;
 
     /// @brief memory type과 surface 지원 조회에 쓴다.
     vk::PhysicalDevice physicalDevice_{};
@@ -70,6 +76,9 @@ private:
 
     /// @brief present에 쓰는 큐.
     vk::Queue presentQueue_{};
+
+    /// @brief 이 디바이스가 만든 커맨드 버퍼의 소유자이다. 디바이스보다 먼저 파괴한다.
+    vk::CommandPool commandPool_{};
 };
 
 /**
