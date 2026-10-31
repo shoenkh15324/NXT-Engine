@@ -12,6 +12,7 @@
 #include <nxt/graphics/rhi/core/instance.hpp>
 #include <nxt/graphics/rhi/frame/command_buffer.hpp>
 #include <nxt/graphics/rhi/frame/fence.hpp>
+#include <nxt/graphics/rhi/frame/resource_deletion.hpp>
 #include <nxt/graphics/rhi/frame/semaphore.hpp>
 #include <nxt/graphics/rhi/frame/swapchain.hpp>
 #include <nxt/graphics/rhi/resource/image.hpp>

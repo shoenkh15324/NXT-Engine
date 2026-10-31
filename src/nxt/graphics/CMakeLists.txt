@@ -72,6 +72,7 @@ target_sources(nxt_graphics
             rhi/frame/semaphore.hpp
             rhi/frame/swapchain.hpp
             rhi/frame/command_buffer.hpp
+            rhi/frame/resource_deletion.hpp
             rhi/resource/memory.hpp
             rhi/resource/image.hpp
 )
