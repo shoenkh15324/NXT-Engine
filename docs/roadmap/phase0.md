@@ -288,9 +288,9 @@ sequenceDiagram
 | **A2 스켈레톤 배선** | 🟢 완료. Vulkan 소스 0개로 target 7개 생성, 빌드·테스트 통과 |
 | **A3 창** | 🟢 완료. `Window` interface + `Win32Window` (HWND) |
 | **A4 RHI 경계와 수명** | 🟢 완료. `rhi/` 공개 헤더 + `instance`·`device` 백엔드, 링크 게이트 0, 헤더 단독 `/W4 /WX` 통과. Linux는 보류 |
-| **A5 RHI 자원과 동기** | 🟢 완료. 공개 헤더 6종 + 백엔드 6종(`memory`·`fence`·`semaphore`·`swapchain`·`command_buffer`·`resource_deletion`). 링크 게이트 통과. GPU 런타임 확인은 A6에서 |
-| **A6 프레임 루프** | 🔴 `engine/frame_loop.*` 0바이트 |
-| **A7 0-A 검증** | 🔴 A6가 끝나야 시작한다 |
+| **A5 RHI 자원과 동기** | 🟢 완료. 공개 헤더 6종 + 백엔드 6종(`memory`·`fence`·`semaphore`·`swapchain`·`command_buffer`·`resource_deletion`). 링크 게이트 통과. GPU 런타임 확인은 A7에서 |
+| **A6 프레임 루프** | 🟢 완료. `engine/frame_loop.{hpp,cpp}`. 레인 자원 소유와 out-of-date 반환 계약, 링크 게이트 통과. GPU 실행은 A7에서 |
+| **A7 0-A 검증** | 🔴 A6는 끝났다. 이제 실제 GPU에서 확인한다 |
 | **B 삼각형** | 🔴 미착수 |
 | **C 계층 배선** | 🔴 미착수 |
 
@@ -708,7 +708,9 @@ memory type bits(`DEVICE_LOCAL` `HOST_VISIBLE` `HOST_COHERENT` `HOST_CACHED`)
 
 ## A6. 프레임 루프
 
-- [ ] `engine/frame_loop.{hpp,cpp}` — acquire → clear → submit → present
+- [x] `engine/frame_loop.{hpp,cpp}` — acquire → record → submit → present
+- [x] 레인 자원(fence · semaphore · command buffer) 소유와 out-of-date 반환 계약
+- [x] Debug 빌드 `/W4` 경고 0, 링크 게이트(`/W4 /WX /MDd`), clang-format, ctest 2/2 통과
 
 설계 고정 사항 ([`frame.md`](../design/frame.md))
 
@@ -720,6 +722,25 @@ destroy()는 지연 목록에 넣고, 그 리소스를 마지막으로 쓴 프�
   신호된 뒤에 실제 파괴한다
 파괴 순서는 Pipeline → Buffer/Image
 ```
+
+구현이 정한 것 세 가지.
+
+```text
+레인 수     = swapchain.imageCount()
+              레인마다 fence · command buffer · acquire semaphore 하나
+              present semaphore만 이미지 수만큼 따로 (색인 기준이 다르다)
+
+out-of-date = Status::OutOfDate 반환값. 루프가 스스로 recreate하지 않는다
+              재생성 시점은 창 크기를 아는 호출자가 정한다. 루프가 대신하면
+              최소화 상태에서 busy loop이 된다
+
+종료 순서   = 모든 fence 대기 → 지연 파괴 flush → 레인 파괴
+              마지막 제출이 GPU에 남아 있어도 파괴가 먼저 일어나지 않는다
+```
+
+A6 시점에는 renderer가 없으므로 그리기는 `RecordFunction`으로 받는다. A7은 clear만
+하는 람다를 넘기고, 0-C에서 `Renderer::record`를 감싼 함수로 바꾼다 — 프레임 루프는
+무엇을 그리는지 모른 채 그대로 남는다.
 
 ## A7. 0-A 검증
 
