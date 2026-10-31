@@ -7,3 +7,4 @@ install/
 compile_commands.json
 external/
 logs/
+.cache/
