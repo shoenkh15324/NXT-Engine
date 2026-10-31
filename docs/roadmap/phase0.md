@@ -6,6 +6,280 @@
 
 ---
 
+## 아키텍처 지도 — 먼저 읽을 것
+
+이 문서는 "삼각형을 그리는 방법"이 아니라 **GPU를 다루는 골격을 세우는 순서**다.
+그래서 코드를 읽기 전에 네 가지를 그림으로 먼저 고정한다.
+
+| 그림 | 답하는 질문 | 결정하는 것 |
+|---|---|---|
+| 계층 구조 | 누가 무엇을 아는가 | 경계. 한 번 넘으면 되돌리기 비싸다 |
+| RHI 타입 지도 | 어떤 객체가 있고 누가 만드는가 | 소유권과 수명 |
+| 프레임 시퀀스 | 한 프레임에 무슨 일이 순서대로 일어나는가 | GPU 버그의 대부분이 여기서 갈린다 |
+| 지연 파괴 · 리사이즈 | destroy는 왜 즉시 일어나지 않는가 | use-after-free를 막는 유일한 방법 |
+
+### 1. A1 → A7 진행 지도
+
+```mermaid
+flowchart LR
+    a1["A1 환경<br/>SDK · find_package(Vulkan)"]
+    a2["A2 스켈레톤<br/>빈 target 7개 · 테스트 통과"]
+    a3["A3 창<br/>Window 계약 + Win32 구현"]
+    a4["A4 RHI 경계<br/>Instance · Device · 링크 게이트"]
+    a5["A5 자원과 동기<br/>Memory · Fence · Semaphore<br/>Swapchain · CommandBuffer · Deletion"]
+    a6["A6 프레임 루프<br/>acquire → record → submit → present"]
+    a7["A7 검증<br/>색으로 채워진 창 · 리사이즈 · 60fps"]
+    b["0-B 삼각형"]
+
+    a1 --> a2 --> a3 --> a4 --> a5 --> a6 --> a7 --> b
+```
+
+각 단계는 앞 단계의 산출물만 쓴다. A5까지는 **아무도 프레임을 돌리지 않으므로**
+`nxt_graphics`가 STATIC 라이브러리인 채로 남고, 심볼이 정의되지 않아도 빌드가 통과한다.
+그래서 각 단계마다 임시 TU로 링크 게이트를 돌린다 — "빌드가 됐다"와 "쓸 수 있다"는 다르다.
+A6에서 처음으로 전부 이어지고, A7에서 비로소 창에 무언가가 나온다.
+
+### 2. 계층 구조 — 아는 것의 경계
+
+```mermaid
+flowchart BT
+    core["nxt_core<br/>log · assert · time · memory · handle"]
+    platform["nxt_platform<br/>Window (HWND) · 이벤트 · 로그 sink"]
+    renderer["nxt_renderer<br/>Renderer · Pass — 무엇을 그릴지"]
+    engine["nxt_engine<br/>FrameLoop — 언제 할지"]
+    sandbox["sandbox<br/>창을 열고 루프를 돌린다"]
+
+    subgraph graphics["nxt_graphics — 프레임을 정의한다"]
+        direction TB
+        rhi["rhi/<br/>공개 계약. vk:: 없음"]
+        vulkan["backends/vulkan<br/>vk:: 를 아는 유일한 코드"]
+        vulkan -.->|구현한다| rhi
+    end
+
+    core --> platform
+    platform --> graphics
+    graphics --> renderer
+    renderer --> engine
+    engine --> sandbox
+```
+
+화살표는 "의존한다"이고 위로 갈수록 응용에 가깝다. **금지된 화살표가 두 개다.**
+`renderer → backends/vulkan`(렌더러가 Vulkan을 직접 만짐)과 `rhi/ → vk::`(계약이 API에
+묶임)다. 둘 중 하나만 생겨도 Phase 3의 render graph를 넣을 때 전부 뜯어야 한다.
+문서 끝의 `grep` 검증 항목이 그 둘을 기계적으로 확인한다.
+
+`graphics`는 "GPU에 무엇을 시킬지"를 알고, `engine`은 "언제"만 안다. 두 책임을 가르는
+기준은 `present`다 — 화면에 내보내는 순간이 프레임의 끝이고, 그 시점을 아는 쪽은
+엔진이다 (frame.md §2).
+
+### 3. RHI 타입 지도 — 두 가지 모양
+
+```mermaid
+classDiagram
+    direction LR
+
+    class Instance {
+        <<abstract>>
+        +create() Instance
+        +createSurface(window) Surface
+        +createDevice(desc) Device
+    }
+    class Device {
+        <<abstract>>
+        +graphicsQueue() Queue
+        +presentQueue() Queue
+    }
+    class Swapchain {
+        <<abstract>>
+        +acquireNextImage(signal) optional~uint32~
+        +present(imageIndex, wait) bool
+        +imageView(imageIndex) ImageView
+        +format() Format
+        +imageCount() uint32
+        +extent() Extent2D
+        +recreate()
+    }
+    class CommandEncoder {
+        <<abstract>>
+        +beginRenderPass(desc)
+        +endRenderPass()
+    }
+    class ResourceDeletion {
+        <<abstract>>
+        +deferDestroy(frameIndex, destroy)
+        +collect(frameIndex)
+        +flush()
+    }
+    class Surface {
+        <<handle>>
+    }
+    class Queue {
+        <<handle>>
+    }
+    class Fence {
+        <<handle>>
+    }
+    class Semaphore {
+        <<handle>>
+    }
+    class CommandBuffer {
+        <<handle>>
+    }
+    class Memory {
+        <<handle>>
+    }
+    class ImageView {
+        <<handle>>
+    }
+
+    Instance --> Device : 만든다
+    Instance ..> Surface : 만든다
+    Device ..> Queue : 준다
+    Device ..> Fence : 만든다
+    Device ..> Semaphore : 만든다
+    Device ..> Memory : 만든다
+    Device ..> CommandBuffer : 만든다
+    Device ..> Swapchain : 만든다
+    Device ..> CommandEncoder : 만든다
+    Device ..> ResourceDeletion : 만든다
+    Swapchain --> ImageView : 소유한다
+    CommandBuffer ..> CommandEncoder : 기록 창구
+    ResourceDeletion ..> Fence : 신호를 근거로 삼는다
+```
+
+**모양이 두 가지인 이유는 딱 하나다 — 상태를 들고 있느냐.**
+
+- `<<handle>>` (값 핸들 + 자유 함수): 핸들 하나로 끝난다. 배열로 들고 다니기 쉽다.
+- `<<abstract>>` (추상 클래스 + factory): 핸들 외에 자체 상태가 있다. `Swapchain`은 픽셀
+  형식·이미지 개수·view 배열을, `CommandEncoder`는 render pass를, `ResourceDeletion`은
+  대기 목록을 들고 있다. 값으로 복사하면 그 상태가 갈라지므로 복사를 막는다.
+
+계약과 구현의 대응은 파일 이름이 같다.
+
+```text
+rhi/ (계약 — vk:: 없음)              backends/vulkan/ (구현 — vk:: 는 여기서만)
+core/instance.hpp                    core/vulkan_instance.cpp
+core/device.hpp                      core/vulkan_device.cpp
+resource/memory.hpp                  resource/vulkan_memory.cpp
+frame/fence.hpp                      frame/vulkan_fence.cpp
+frame/semaphore.hpp                  frame/vulkan_semaphore.cpp
+frame/swapchain.hpp                  frame/vulkan_swapchain.cpp
+frame/command_buffer.hpp             frame/vulkan_command_buffer.cpp
+frame/resource_deletion.hpp          frame/vulkan_resource_deletion.cpp
+```
+
+`ResourceDeletion`의 구현만 `vk::`를 한 줄도 쓰지 않는다. 이 타입이 하는 일은 Vulkan
+호출이 아니라 **호출 시점을 정하는 것**이기 때문이다. 그래서 리소스 종류가 늘어도 이
+파일은 바뀌지 않는다.
+
+### 4. 한 프레임의 시퀀스 — A6가 만드는 것
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant L as engine::FrameLoop
+    participant D as rhi::Device
+    participant RD as rhi::ResourceDeletion
+    participant S as rhi::Swapchain
+    participant C as rhi::CommandBuffer
+    participant E as rhi::CommandEncoder
+    participant R as renderer::Renderer
+
+    Note over L,RD: 프레임 N 시작. CPU가 GPU보다 3프레임 앞서지 않게 여기서 멈춘다
+    L->>D: waitFence(fences[frameIndex])
+    L->>RD: collect(frameIndex)
+    Note right of RD: 그 프레임이 마지막으로 쓴 리소스는<br/>이제 파괴해도 된다
+
+    L->>S: acquireNextImage(acquireSem[frameIndex])
+    S-->>L: imageIndex
+
+    opt acquire가 nullopt를 돌려줌 (out of date)
+        L->>RD: flush() — 모든 fence를 기다린 뒤
+        L->>S: recreate()
+        L->>S: acquireNextImage(acquireSem[frameIndex])
+        S-->>L: imageIndex
+    end
+
+    L->>C: beginCommandBuffer()
+    L->>E: create(device, commandBuffer)
+    L->>R: record(encoder, target)
+    R->>E: beginRenderPass(imageView[imageIndex])
+    R->>E: endRenderPass()
+    L->>C: endCommandBuffer()
+
+    L->>D: submit(cmd, wait=acquireSem[frameIndex], signal=presentSem[imageIndex], fence=fences[frameIndex])
+    L->>S: present(imageIndex, presentSem[imageIndex])
+```
+
+읽을 때 주목할 지점이 넷이다.
+
+1. **맨 앞의 `waitFence`가 백프레시다.** 없으면 CPU가 큐를 무한히 쌓는다. 여기서 기다리는
+   것은 3프레임 전에 제출한 프레임이므로, 그 프레임이 쓴 리소스는 지금 안전하다.
+2. **`collect`가 `waitFence` 바로 뒤에 온다.** 이 순서가 "더는 쓰지 않는다"의 근거다.
+   순서를 바꾸면 파괴 직전에 GPU가 여전히 쓰는 리소스를 지운다.
+3. **`record`가 encoder만 받는 것이 경계다.** renderer는 `Device`도 `CommandBuffer`도 받지
+   않으므로 GPU 상태를 직접 다룰 수 없다. "렌더러는 Vulkan을 모른다"가 관례가 아니라
+   타입으로 강제된다 (frame.md §3).
+4. **semaphore 두 개의 색인이 다르다.** acquire용은 프레임 인덱스, present용은 **이미지
+   인덱스**다. `vkQueuePresentKHR`는 fence를 신호하지 않으므로, 이미지 인덱스로 색인한
+   semaphore만이 "그 이미지를 쓴 이전 present가 끝났다"를 보장한다 (frame.md §5).
+
+### 5. 리소스 지연 파괴 — A5의 마지막 조각
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant App as 호출자 (renderer · frame loop)
+    participant RD as rhi::ResourceDeletion
+    participant Dev as rhi::Device
+    participant GPU as GPU
+
+    App->>RD: deferDestroy(frameIndex, 삭제자)
+    Note right of RD: pending_ 에 넣기만 한다.<br/>vkDestroy* 는 아직 부르지 않는다
+
+    GPU-->>App: fences[frameIndex] 신호
+    App->>RD: collect(frameIndex) — waitFence 직후
+    RD->>App: 저장해 둔 삭제자를 부른다
+    App->>Dev: freeMemory(device, memory) 같은 해제 함수
+    Dev->>GPU: vkFreeMemory · vkDestroyImageView
+```
+
+**즉시 파괴가 왜 위험한가.** 트리플 버퍼링이면 GPU가 세 프레임을 동시에 처리한다. 프레임
+10을 CPU가 기록하는 동안 GPU는 프레임 8을 그리고 있을 수 있다. 그때 프레임 8이 쓰는 view를
+destroy하면 use-after-free다. 재현이 어렵고 검증 레이어에서만 잡히는 종류의 버그다.
+
+**이 타입이 없으면 그 판단이 호출부마다 흩어진다.** 지금은 "마지막으로 쓴 프레임 인덱스"만
+넘기면 나머지는 fence가 결정한다. 삽입 순서가 곧 파괴 순서이므로 `Pipeline → Buffer` 같은
+의존성 순서도 타입을 늘리지 않고 표현된다 (frame.md §9).
+
+### 6. 리사이즈 — A7에서 이 경로가 검증된다
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant W as nxt_platform Window
+    participant L as engine::FrameLoop
+    participant RD as rhi::ResourceDeletion
+    participant S as rhi::Swapchain
+    participant V as backends/vulkan
+
+    W-->>L: 크기 변경
+    Note over L: 이 대기가 빠지면 GPU가 파괴된 리소스에 접근한다 (frame.md §6)
+    L->>L: 모든 in-flight fence 대기
+    L->>RD: flush()
+    RD->>V: 남은 삭제자 전부 실행
+    L->>S: recreate()
+    S->>V: vkCreateSwapchainKHR(oldSwapchain) + image view 재생성
+    V-->>S: 새 이미지 · 새 view
+    Note over L: fence 배열은 그대로, present semaphore는 이미지 개수 기준으로 다시 맞춘다
+```
+
+리사이즈를 빠르게 반복하면 이 경로가 초당 수십 번 돈다. 그래서 A7 검증 항목에
+"리사이즈해도 깨지지 않는다"가 들어 있다. 이 시퀀스를 지키지 않으면 창을 흔드는 것만으로
+크래시가 난다.
+
+---
+
 ## 현재 상태
 
 | 단계 | 상태 |
@@ -14,7 +288,7 @@
 | **A2 스켈레톤 배선** | 🟢 완료. Vulkan 소스 0개로 target 7개 생성, 빌드·테스트 통과 |
 | **A3 창** | 🟢 완료. `Window` interface + `Win32Window` (HWND) |
 | **A4 RHI 경계와 수명** | 🟢 완료. `rhi/` 공개 헤더 + `instance`·`device` 백엔드, 링크 게이트 0, 헤더 단독 `/W4 /WX` 통과. Linux는 보류 |
-| **A5 RHI 자원과 동기** | 🟡 착수. `memory`·`image`·`fence`·`semaphore`·`swapchain`·`command_buffer` 헤더 완료. `memory`·`fence`·`semaphore`·`swapchain`·`command_buffer` 백엔드 완료. `resource_deletion` 백엔드 1개 남음 |
+| **A5 RHI 자원과 동기** | 🟢 완료. 공개 헤더 6종 + 백엔드 6종(`memory`·`fence`·`semaphore`·`swapchain`·`command_buffer`·`resource_deletion`). 링크 게이트 통과. GPU 런타임 확인은 A6에서 |
 | **A6 프레임 루프** | 🔴 `engine/frame_loop.*` 0바이트 |
 | **A7 0-A 검증** | 🔴 A6가 끝나야 시작한다 |
 | **B 삼각형** | 🔴 미착수 |
@@ -49,7 +323,8 @@ nxt_core → nxt_platform → nxt_graphics → nxt_renderer → nxt_engine
                                     backends/vulkan  (Vulkan을 아는 곳은 여기뿐)
 ```
 
-역방향 의존이 없어야 한다. 이 다이어그램의 화살표가 모두 실제 코드 경로가 되면 Phase 0 끝.
+역방향 의존이 없어야 한다. 위의「계층 구조」그림과 같은 방향이고, 그 화살표가 모두 실제
+코드 경로가 되면 Phase 0 끝이다.
 
 설계 근거는 [`../design/rhi.md`](../design/rhi.md),
 [`../design/frame.md`](../design/frame.md),
@@ -326,7 +601,7 @@ GPU 리소스(`resource/`)와 프레임 동기(`frame/`)를 붙인다. 이 단�
 - [x] `frame/semaphore.hpp` — Semaphore (`frame.md` §5가 요구. 처음 스파인 목록에 누락돼 있었다)
 - [x] `frame/swapchain.hpp`
 - [x] `frame/command_buffer.hpp` — CommandBuffer, CommandEncoder, RenderPassDesc
-- [ ] `frame/resource_deletion.hpp` — fence 기반 지연 파괴
+- [x] `frame/resource_deletion.hpp` — fence 기반 지연 파괴
 
 ### Semaphore에 단독 대기 연산이 없다
 
@@ -417,7 +692,7 @@ B4가 깊이 버퍼를 앞당긴 것과 같은 논리다.
 - [x] `frame/vulkan_fence.cpp` · `frame/vulkan_semaphore.cpp`
 - [x] `frame/vulkan_swapchain.cpp`
 - [x] `frame/vulkan_command_buffer.cpp`
-- [ ] `frame/vulkan_resource_deletion.cpp`
+- [x] `frame/vulkan_resource_deletion.cpp`
 
 **`memory.hpp`가 별도 계층인 이유.** `SystemAllocator`로 대체되지 않는다.
 
