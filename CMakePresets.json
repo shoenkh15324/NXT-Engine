@@ -29,6 +29,18 @@
                 "CMAKE_CXX_STANDARD_REQUIRED": "ON",
                 "NXT_BUILD_TESTS": "ON"
             }
+        },
+        {
+            "name": "clangd",
+            "displayName": "clangd (Ninja + clang-cl, IntelliSense only)",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build/clangd",
+            "cacheVariables": {
+                "CMAKE_CXX_COMPILER": "clang-cl",
+                "CMAKE_BUILD_TYPE": "Debug",
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+                "NXT_BUILD_TESTS": "ON"
+            }
         }
     ],
     "buildPresets": [
