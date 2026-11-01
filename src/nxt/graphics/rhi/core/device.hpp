@@ -72,6 +72,17 @@ public:
      */
     [[nodiscard]]
     virtual Queue presentQueue() const noexcept = 0;
+
+    /**
+     * @brief 제출된 모든 GPU 작업이 끝날 때까지 기다린다.
+     *
+     * 펜스는 submit 완료만 보장하고 present 완료는 보장하지 않는다 (frame.md §5).
+     * 그래서 present가 참조하는 swapchain이나 semaphore를 파괴하기 전에는 이 함수가
+     * 필요하다. 큐 전체를 멈추므로 리사이즈·종료처럼 드문 경로에서만 부른다.
+     *
+     * @note CPU가 블록된다. 프레임 루프 안에서 매 프레임 부르지 않는다.
+     */
+    virtual void waitIdle() const = 0;
 };
 
 } // namespace nxt::graphics::rhi

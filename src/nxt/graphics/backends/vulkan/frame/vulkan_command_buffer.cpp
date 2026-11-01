@@ -90,9 +90,14 @@ vk::Framebuffer createColorFramebuffer(vk::Device device, vk::RenderPass renderP
  *
  * render pass는 이 객체가 들고 있는다. 형식만으로 정해지고 image view와 무관하므로
  * swapchain을 재생성해도 그대로 쓸 수 있다. 반면 framebuffer는 특정 view에 묶이는데
- * 그 view는 swapchain이 재생성할 때마다 파괴되므로 캐시하지 않고 pass마다 만들고
- * 버린다 — 캐시하면 "이 핸들이 아직 유효한가"를 뷰 수명과 함께 관리해야 한다.
+ * 그 view는 swapchain이 재생성할 때마다 파괴되므로 캐시하지 않고 pass마다 만든다.
  * 드라이버 호출 두 번은 측정된 병목이 아니다 (CODING_RULES.md §16).
+ *
+ * @note framebuffer를 endRenderPass()에서 버리지 않는다. 그 시점에는 command buffer가
+ *       아직 recording 중이고, Vulkan은 recording 중인 command buffer가 참조하는
+ *       framebuffer와 render pass를 파괴하는 것을 허용하지 않는다
+ *       (VUID-vkEndCommandBuffer-commandBuffer-00059). 파괴는 다음 beginRenderPass()와
+ *       소멸자로 미룬다 — 둘 다 이 레인의 fence가 신호된 뒤에 불린다.
  *
  * @note 이 클래스는 rhi::CommandEncoder::create()만 만든다. 다른 TU가 이름을 알
  *       필요가 없어 헤더를 두지 않는다.
@@ -106,6 +111,8 @@ public:
 
     ~VulkanCommandEncoder() override {
         // begin/end 사이에서 encoder가 사라지는 경우까지 정리한다.
+        // 프레임 루프가 이 레인의 fence를 기다리고 device.waitIdle()까지 마친 뒤에
+        // 부른다 — 그 전에 부르면 실행 중인 명령이 참조하는 render pass를 파괴한다.
         releaseFramebuffer();
         releaseRenderPass();
     }
@@ -117,7 +124,14 @@ public:
         NXT_ASSERT_MSG(desc.color.valid(), "유효하지 않은 color attachment로 render pass를 시작하려 했다.");
         NXT_ASSERT_MSG(desc.colorFormat != rhi::Format::Undefined, "color attachment의 형식이 정해지지 않았다.");
         NXT_ASSERT_MSG((desc.extent.width > 0) && (desc.extent.height > 0), "render area의 크기가 0이다.");
-        NXT_ASSERT_MSG(!framebuffer_, "이전 render pass를 끝내지 않고 다시 시작하려 했다.");
+        NXT_ASSERT_MSG(!passActive_, "이전 render pass를 끝내지 않고 다시 시작하려 했다.");
+
+        // 지난번 이 레인이 쓴 framebuffer를 여기서 버린다. 프레임 루프가 이 레인의
+        // fence를 기다린 뒤 beginCommandBuffer()를 불렀으므로 그 framebuffer를 쓴
+        // 제출은 이미 끝났고, 방금 reset된 command buffer는 아무것도 참조하지 않는다.
+        // endRenderPass()에서 버리면 recording 중인 command buffer가 참조하는 대상을
+        // 파괴하게 된다 (VUID-vkEndCommandBuffer-commandBuffer-00059).
+        releaseFramebuffer();
 
         // render pass는 형식에만 달려 있다. Phase 0은 형식이 하나라 한 번만 만든다.
         if (!renderPass_ || (renderPassFormat_ != desc.colorFormat)) {
@@ -140,21 +154,22 @@ public:
         beginInfo.pClearValues = &clearValue;
 
         commandBuffer_.beginRenderPass(beginInfo, vk::SubpassContents::eInline);
+        passActive_ = true;
     }
 
     void endRenderPass() override {
-        NXT_ASSERT_MSG(framebuffer_, "시작하지 않은 render pass를 끝내려 했다.");
+        NXT_ASSERT_MSG(passActive_, "시작하지 않은 render pass를 끝내려 했다.");
 
         commandBuffer_.endRenderPass();
 
-        // framebuffer는 명령이 아직 실행 중이어도 파괴할 수 있다 (Vulkan object lifetime).
-        // 그래서 제출을 기다리지 않고 여기서 바로 버린다. render pass는 형식에만 묶여
-        // 있어 다음 pass에서 그대로 재사용한다.
-        releaseFramebuffer();
+        // framebuffer는 여기서 파괴하지 않는다. 아직 recording 중이고, recording 중인
+        // command buffer가 참조하는 대상을 파괴하면 그 command buffer가 무효가 된다.
+        // 파괴는 다음 beginRenderPass()로 미룬다.
+        passActive_ = false;
     }
 
 private:
-    /// @brief framebuffer를 파괴한다. pass가 끝나거나 encoder가 사라질 때 부른다.
+    /// @brief framebuffer를 파괴한다. 다음 pass가 시작되거나 encoder가 사라질 때 부른다.
     void releaseFramebuffer() noexcept {
         if (framebuffer_) {
             device_.device().destroyFramebuffer(framebuffer_);
@@ -177,7 +192,7 @@ private:
     /// @brief 기록할 대상이다. 소유하지 않는다.
     vk::CommandBuffer commandBuffer_{};
 
-    /// @brief beginRenderPass()가 만들고 endRenderPass()가 파괴하는 framebuffer.
+    /// @brief beginRenderPass()가 만들고 다음 beginRenderPass()가 파괴하는 framebuffer.
     vk::Framebuffer framebuffer_{};
 
     /// @brief 이 encoder가 쓰는 render pass. 형식이 정해진 뒤에만 유효하다.
@@ -185,6 +200,9 @@ private:
 
     /// @brief renderPass_를 만든 형식. 다르면 다시 만든다.
     rhi::Format renderPassFormat_{rhi::Format::Undefined};
+
+    /// @brief beginRenderPass()와 endRenderPass()가 짝을 이루는지 확인한다.
+    bool passActive_ = false;
 };
 
 } // namespace
