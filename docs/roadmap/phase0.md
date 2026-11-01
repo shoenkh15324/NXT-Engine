@@ -259,24 +259,34 @@ sequenceDiagram
     autonumber
     participant W as nxt_platform Window
     participant L as engine::FrameLoop
+    participant Dev as rhi::Device
     participant RD as rhi::ResourceDeletion
     participant S as rhi::Swapchain
     participant V as backends/vulkan
 
     W-->>L: 크기 변경
-    Note over L: 이 대기가 빠지면 GPU가 파괴된 리소스에 접근한다 (frame.md §6)
+    Note over L: fence는 제출만 보장한다. present까지 비우지 않으면 파괴된 swapchain을 참조한다 (frame.md §6)
     L->>L: 모든 in-flight fence 대기
+    L->>Dev: waitIdle()
     L->>RD: flush()
     RD->>V: 남은 삭제자 전부 실행
+    L->>L: destroyFrames() — encoder의 framebuffer가 image view보다 먼저 사라져야 한다
     L->>S: recreate()
     S->>V: vkCreateSwapchainKHR(oldSwapchain) + image view 재생성
     V-->>S: 새 이미지 · 새 view
-    Note over L: fence 배열은 그대로, present semaphore는 이미지 개수 기준으로 다시 맞춘다
+    L->>L: createFrames() — fence · semaphore · command buffer · encoder 재생성
+    Note over L: 이미지 개수가 같아도 다시 만든다. present가 남긴 신호를 물려받지 않기 위해서다
 ```
 
 리사이즈를 빠르게 반복하면 이 경로가 초당 수십 번 돈다. 그래서 A7 검증 항목에
 "리사이즈해도 깨지지 않는다"가 들어 있다. 이 시퀀스를 지키지 않으면 창을 흔드는 것만으로
 크래시가 난다.
+
+**fence 대기와 `waitIdle()`을 둘 다 두는 이유.** fence는 우리가 제출한 작업만 안다.
+present는 제출 이후 큐에 남는 별개 연산이고 fence를 신호하지 않으므로, fence만 기다린
+상태에서는 swapchain을 아직 쓰는 present가 있을 수 있다. 리사이즈는 드물어서 큐를 비우는
+비용이 문제되지 않는다. 반대로 프레임 루프 안에서는 부르지 않는다 — 매 프레임 GPU를
+비우면 프레임률이 무너진다.
 
 ---
 
@@ -290,7 +300,7 @@ sequenceDiagram
 | **A4 RHI 경계와 수명** | 🟢 완료. `rhi/` 공개 헤더 + `instance`·`device` 백엔드, 링크 게이트 0, 헤더 단독 `/W4 /WX` 통과. Linux는 보류 |
 | **A5 RHI 자원과 동기** | 🟢 완료. 공개 헤더 6종 + 백엔드 6종(`memory`·`fence`·`semaphore`·`swapchain`·`command_buffer`·`resource_deletion`). 링크 게이트 통과. GPU 런타임 확인은 A7에서 |
 | **A6 프레임 루프** | 🟢 완료. `engine/frame_loop.{hpp,cpp}`. 레인 자원 소유와 out-of-date 반환 계약, 링크 게이트 통과. GPU 실행은 A7에서 |
-| **A7 0-A 검증** | 🔴 A6는 끝났다. 이제 실제 GPU에서 확인한다 |
+| **A7 0-A 검증** | 🟢 완료. 검증 레이어 ON에서 clear 색 채움(중앙 픽셀 89/124/149) · 자동 리사이즈 3회 · 정상 종료, VUID/ERROR 0건. fps 로그 145 |
 | **B 삼각형** | 🔴 미착수 |
 | **C 계층 배선** | 🔴 미착수 |
 
@@ -649,10 +659,16 @@ vkFreeMemory(device, ...)           vkResetFences(device, ...)
 스레드도 큐도 하나뿐이라 pool을 나눌 이유가 없고, 디바이스보다 먼저 파괴한다.
 
 `CommandEncoder`는 `create()`가 `unique_ptr`로 돌려준다. render pass와 framebuffer를
-begin/end 사이에 들고 있어야 하는데 `vk::` 타입은 `rhi/` 헤더에 올 수 없기 때문에
-`Swapchain`과 같은 이유로 자체 상태를 갖는다. 이 중 render pass는 형식에만 묶여
-재사용하고, framebuffer는 특정 image view에 묶여 swapchain 재생성마다 무효가 되므로
-pass마다 만들고 버린다.
+들고 있어야 하는데 `vk::` 타입은 `rhi/` 헤더에 올 수 없기 때문에 `Swapchain`과 같은
+이유로 자체 상태를 갖는다. render pass는 형식에만 묶이므로 재사용하고, framebuffer는
+특정 image view에 묶이므로 pass마다 만든다.
+
+**다만 파괴는 pass가 끝나는 즉시가 아니라 다음 `beginRenderPass()`와 encoder 소멸자로
+미룬다.** recording 중인 command buffer가 참조하는 framebuffer·render pass를 파괴하는
+것을 Vulkan이 허용하지 않기 때문이다 (VUID-vkEndCommandBuffer-commandBuffer-00059).
+그래서 `FrameLoop`는 encoder를 프레임마다 만들고 버리지 않고 **레인마다 하나씩**
+소유한다(`encoders_`). 레인을 다시 만들 때(리사이즈·종료)만 버리며, 그 시점에는 fence
+대기와 `device.waitIdle()`이 이미 끝나 있다.
 
 ### Memory는 CPU 할당자와 대체 관계가 아니다
 
@@ -727,15 +743,15 @@ destroy()는 지연 목록에 넣고, 그 리소스를 마지막으로 쓴 프�
 
 ```text
 레인 수     = swapchain.imageCount()
-              레인마다 fence · command buffer · acquire semaphore 하나
+              레인마다 encoder · fence · command buffer · acquire semaphore 하나
               present semaphore만 이미지 수만큼 따로 (색인 기준이 다르다)
 
 out-of-date = Status::OutOfDate 반환값. 루프가 스스로 recreate하지 않는다
               재생성 시점은 창 크기를 아는 호출자가 정한다. 루프가 대신하면
               최소화 상태에서 busy loop이 된다
 
-종료 순서   = 모든 fence 대기 → 지연 파괴 flush → 레인 파괴
-              마지막 제출이 GPU에 남아 있어도 파괴가 먼저 일어나지 않는다
+종료 순서   = 모든 fence 대기 → device.waitIdle() → 지연 파괴 flush → 레인 파괴
+              fence는 제출만 보장한다. present까지 비운 뒤에 semaphore를 파괴한다
 ```
 
 A6 시점에는 renderer가 없으므로 그리기는 `RecordFunction`으로 받는다. A7은 clear만
@@ -744,11 +760,33 @@ A6 시점에는 renderer가 없으므로 그리기는 `RecordFunction`으로 받
 
 ## A7. 0-A 검증
 
-- [ ] 창이 열린다
-- [ ] 지정한 색으로 화면이 채워진다
-- [ ] 리사이즈해도 깨지지 않는다
-- [ ] 캡처 도구로 60fps 이상 확인된다
-- [ ] 리소스 파괴 후 GPU 크래시가 없다 (검증 레이어 ON 기준)
+- [x] 창이 열린다
+- [x] 지정한 색으로 화면이 채워진다 — 창 중앙 픽셀 R=89 G=124 B=149 (clear `(0.10, 0.20, 0.30)`의 sRGB 값)
+- [x] 리사이즈해도 깨지지 않는다 — 884×461 → 1384×761 → 624×441 연속 3회, VUID/ERROR 0건
+- [x] 60fps 이상 확인된다 — 앱 fps 로그 145 (외부 캡처 도구 측정은 남음)
+- [x] 리소스 파괴 후 GPU 크래시가 없다 (검증 레이어 ON 기준)
+
+### 구현이 정한 것
+
+| 질문 | 정한 것 | 이유 |
+|---|---|---|
+| 앱 이름·검증 레이어 설정 | `InstanceDesc { appName, enableValidation }` | 앱마다 다른 값이라 `project()`에서 주입할 수 없다. 샌드박스가 `{.appName = "NXT Sandbox"}`로 자기 이름을 넣는다 |
+| 검증 레이어 기본값 | Debug에서 ON (`kDefaultValidation`) | GPU 오류는 Release에서 조용히 지나간다. 레이어가 설치돼 있지 않으면 경고만 남기고 계속한다 — SDK 없는 머신에서도 앱이 떠야 한다 |
+| 배선 위치 | `apps/sandbox/main.cpp`에 직접 조립 | C1에서 `engine::Engine`로 옮긴다. 지금 추상화를 만들면 소비자 하나를 위한 간접층이 된다 (규칙 16) |
+| out-of-date 처리 | Vulkan-Hpp에 `VULKAN_HPP_HANDLE_ERROR_OUT_OF_DATE_AS_SUCCESS` 정의 | 이 정의가 없으면 Hpp가 우리 `Status::OutOfDate` 검사보다 먼저 assert로 끝낸다. Debug에서만 죽어 원인을 찾기 어렵다 |
+| 리사이즈 파괴 순서 | fence 대기 → `waitIdle()` → flush → `destroyFrames()` → `swapchain.recreate()` → `createFrames()` | encoder의 framebuffer가 swapchain의 image view를 참조한다. view를 먼저 파괴하면 dangling 핸들이 된다 |
+| 레인 재생성 조건 | 이미지 개수가 같아도 항상 재생성 | present가 실패하면 semaphore가 신호된 채 남을 수 있다. 남은 신호를 물려받으면 다음 제출이 거부된다 |
+
+### A7이 드러낸 A6 버그
+
+| 증상 | 원인 | 수정 |
+|---|---|---|
+| clear가 실행되지 않는다 | encoder를 record 직후 파괴해, recording 중인 command buffer가 참조하는 render pass가 사라졌다 | encoder를 레인마다 소유(`encoders_`) |
+| 리사이즈·종료에서 VUID 01282 / 05149 | fence는 present 완료를 보장하지 않는데 fence만 기다리고 swapchain·semaphore를 파괴했다 | 파괴 전 `device.waitIdle()` |
+| 첫 리사이즈에서 `vulkan.hpp` assert abort | Vulkan-Hpp가 OUT_OF_DATE를 successCodes에 넣지 않아 우리 검사보다 먼저 assert | `VULKAN_HPP_HANDLE_ERROR_OUT_OF_DATE_AS_SUCCESS` |
+
+세 번째는 Release에서 조용히 지나가기 때문에 검증 레이어를 켠 Debug에서만 드러난다.
+A7이 "검증 레이어 ON"을 통과 조건으로 둔 이유가 이것이다.
 
 ---
 
@@ -842,11 +880,11 @@ depth는 어차피 Phase 3에 존재한다. 그때 넣으면 Phase 0의 렌더 �
 | `graphics/runtime/` 생존 여부 | 삭제하고 `rhi/`로 통합 | **결정됨 — 삭제.** `frame.md` §3/§7의 `graphics/runtime`은 디렉터리가 아니라 모듈 `nxt_graphics`를 가리키는 표현이다 |
 | namespace 규칙 | flat한 디렉터리는 이름 반복 안 함 (`nxt::math`) | **결정됨 — `nxt::graphics::rhi`.** `rhi.md` §8이 이미 `nxt_graphics::rhi::Memory`로 이름을 확정했다. 백엔드는 `nxt::graphics::vulkan` (`platform::win32` 선례) |
 | graphics 테스트 | Phase 0는 없음 | **결정됨 — 없음.** 검증은 grep 게이트 + 단독 컴파일로 한다. null 백엔드는 요구되지 않았고 그만큼 비싸다 |
-| instance 확장 | `VK_EXT_debug_utils`만 | **결정됨.** 검증 레이어는 A6에서 붙인다 |
+| instance 확장 | `VK_EXT_debug_utils`만 | **결정됨 — A7에서 구현.** `InstanceDesc::enableValidation`이 검증 레이어를 정한다. Debug 기본 ON, 레이어가 없으면 경고 후 계속한다 |
 | `render pass` 이름 충돌 | RHI는 기술자(descriptor) | **결정됨 — `rhi::RenderPassDesc`.** renderer 쪽 `RenderPass`(개별 패스)와 구분한다 |
 | 디렉터리 분류 | 파일이 늘면 기능별로 나눈다 | **결정됨 — `common` · `core` · `frame` · `resource`.** `rhi/`와 `backends/vulkan/`이 같은 이름을 쓴다. 한쪽만 다르면 새 파일을 어디에 넣을지 매번 헷갈린다 |
 | 플랫폼 분기 | 파일 분리 | **결정됨 — `vulkan_instance_win32.cpp` · `vulkan_instance_linux.cpp`.** CMake가 이 플랫폼의 하나만 빌드에 넣는다. `#if`로 한 파일에 몰아넣지 않는다 — Linux는 X11 · Wayland 둘을 가질 수 있다. **구현은 Win32만 한다** — Linux는 자리만 두고 보류라 `vulkan_instance_linux.cpp`는 빈 파일이다 |
-| 엔진 이름·버전 | 코드에 상수로 박기 | **결정됨 — 루트 `project()`에서 주입.** `PROJECT_NAME`이 `NXT`라 `pEngineName`이 `NXT-Engine`에서 `NXT`로 바뀐다. 앱 이름은 앱 몫이라 A7 `InstanceDesc`로 옮긴다 |
+| 엔진 이름·버전 | 코드에 상수로 박기 | **결정됨 — 루트 `project()`에서 주입.** `PROJECT_NAME`이 `NXT`라 `pEngineName`이 `NXT-Engine`에서 `NXT`로 바뀐다. 앱 이름은 앱 몫이라 A7에서 `InstanceDesc::appName`으로 옮겼다 |
 
 ### `frame.md`의 `graphics/runtime` 표기
 
