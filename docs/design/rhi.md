@@ -215,6 +215,12 @@ destroy() → 마지막 사용 프레임 기록 → 지연 목록
 의존성 순서도 지켜야 한다. **Pipeline → Buffer/Image** 순으로 파괴한다.
 파이프라인이 버퍼를 참조하므로 역순은 죽은 핸들을 남긴다.
 
+**fence만으로 충분하지 않은 대상이 있다.** recording 중인 command buffer가 참조하는
+framebuffer와 render pass는 fence 신호와 무관하게 기록이 끝나기 전에 파괴할 수 없다.
+present가 큐에 남겨 swapchain과 semaphore를 붙잡는 경우도 fence가 알려 주지 않는다.
+앞은 encoder가 파괴 시점을 미루고, 뒤는 리사이즈·종료 직전의 `Device::waitIdle()`이
+해결한다. 어느 쪽도 RHI가 아니라 프레임 루프가 순서를 정한다 (frame.md §6, §9).
+
 ## 10. 렌더 패스
 
 Phase 0은 단일 렌더 패스다. 다중 패스는 Phase 3에서 render graph와 함께 들어간다.
@@ -234,5 +240,6 @@ RHI는 render pass를 **기술자(descriptor)**로 받는다. 무엇을 그리�
 6. 추상화는 지금 필요한 것만 한다. IR은 필요해질 때 넣는다.
 7. 모든 GPU 오류는 검증 레이어를 포함해 로깅으로 보고한다.
 8. GPU 메모리는 `nxt_graphics::rhi::Memory`가 만든다. `SystemAllocator`는 CPU 전용이다.
-9. GPU 리소스는 fence 대기 없이 파괴하지 않는다.
+9. GPU 리소스는 fence 대기 없이 파괴하지 않는다. recording 중인 참조와 present가 붙잡은
+   대상은 fence만으로 부족하므로 `waitIdle()`과 순서로 막는다.
 10. 한 백엔드라도 경계는 유지한다. 지금의 대가로 얻는 것은 검증 가능성과 도구 호환성이다.

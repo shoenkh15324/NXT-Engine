@@ -66,15 +66,19 @@ engine/frame_loop  프레임 루프                          → "언제"
 2. record         renderer가 커맨드 버퍼에 그릴 것을 기록한다.
                   이 시점의 모든 GPU 접근은 방금 얻은 image다.
 
-3. submit         기록한 커맨드 버퍼를 GPU 큐에 올린다.
+3. submit         기록한 커맨드 버퍼를 GPU 큐에 올린다. 제출 fence를 신호하도록 건다.
 
-4. present        화면에 제시하고 fence를 신호시킨다.
+4. present        화면에 제시를 요청한다. fence도 semaphore도 신호하지 않는다.
 
-5. wait           프레임이 필요 이상 앞서가지 않도록 fence를 기다린다.
+5. wait           프레임이 필요 이상 앞서가지 않도록 제출 fence를 기다린다.
 ```
 
 **acquire에서 얻은 image를 present 전까지 다른 곳에서 쓰면 안 된다.**
 이 구간이 그 image의 수명이다. 5번 이후로 넘어간 image는 다음 프레임에서 재사용된다.
+
+**4번은 fence를 신호하지 않는다.** 그래서 5번에서 제출 fence를 기다렸다고 present까지
+끝난 것이 아니다. present는 큐에 남아 swapchain image를 계속 붙잡을 수 있다. 이 구분이
+§6(리사이즈)과 §9(파괴)에서 다시 쓰인다.
 
 ## 5. 프레임 페이싱 — 백프레시
 
@@ -121,14 +125,25 @@ submit_semaphores[swapchainImageCount]    ← 이미지 인덱스
 
 ```text
 1. 크기 변화 감지
-2. 이전 프레임의 fence를 모두 기다린다      ← GPU가 리소스를 쓰는 중일 수 있다
-3. 파이프라인 제거
-4. swapchain 재생성
-5. 모든 GPU 리소스를 새 크기에 맞춰 재생성
-6. 파이프라인 재생성
+2. 제출 fence를 모두 기다린다        ← GPU가 리소스를 쓰는 중일 수 있다
+3. device.waitIdle()                 ← present까지 큐를 비운다
+4. framebuffer 제거 (encoder)        ← swapchain의 image view를 참조한다
+5. 파이프라인 제거                   ← render pass를 참조한다
+6. swapchain 재생성
+7. 모든 GPU 리소스를 새 크기에 맞춰 재생성
+8. 파이프라인 재생성
 ```
 
-**2번을 빠뜨리면 GPU가 파괴된 리소스에 접근한다.** 리사이즈를 빠르게 반복하면
+**2번과 3번은 다른 것을 보장한다.** fence는 "제출한 작업이 끝났다"만 말한다. present는
+fence를 신호하지 않으므로, fence만 기다린 상태에서 swapchain을 파괴하면 아직 큐에 남은
+present가 파괴된 swapchain을 참조한다. 그래서 리사이즈처럼 **파괴가 끼는 경로**에서는
+`device.waitIdle()`로 큐 전체를 비운다. 리사이즈는 드물어서 전체 대기 비용이 문제되지 않는다.
+
+**4번이 6번보다 앞서는 이유**는 framebuffer가 swapchain이 소유한 image view를 참조하기
+때문이다. view를 먼저 파괴하면 framebuffer가 dangling 핸들이 된다. 레인(encoder)을 먼저
+버리고 swapchain을 재생성한 뒤 레인을 새로 만든다.
+
+**2·3번을 빠뜨리면 GPU가 파괴된 리소스에 접근한다.** 리사이즈를 빠르게 반복하면
 재현되는 버그가 되므로, 리사이즈 경로에는 반드시 테스트를 둔다.
 
 ## 7. 프레임 스크래치 메모리 위치
@@ -154,7 +169,8 @@ up/down transition용으로 도입된다. 그때 `Pool`과 `Arena`의 첫 실제
 
 | 수단 | Phase 0 쓰임 |
 |---|---|
-| Fence (CPU 대기) | 매 프레임 백프레시, 리소스 파괴, 리사이즈 정리 |
+| Fence (CPU 대기) | 매 프레임 백프레시, 제출 완료 확인, 지연 파괴 |
+| `Device::waitIdle` (큐 전체 대기) | 리사이즈·종료 직전. present까지 포함해 큐를 비운다 |
 | Semaphore (GPU 대기) | acquire → submit, submit → present |
 | Pipeline barrier | `submit`의 암묵적 대기(hand-off barrier)로 충분하다 |
 
@@ -193,6 +209,20 @@ Filament의 `Fence::waitAndDestroy()`와 Unreal의 `FlushPendingDeleteRHIResourc
 **1번이 2번의 근거다.** fence를 기다린 뒤에야 "이 리소스는 더 이상 쓰이지 않는다"를
 말할 수 있다. 순서를 바꾸면 파괴 직전에 GPU가 여전히 쓰는 리소스를 지우게 된다.
 
+### recording 중인 command buffer가 참조하는 대상
+
+**fence가 신호되지 않았어도, recording이 끝나기 전에는 파괴할 수 없는 대상이 있다.**
+`vkCmdBeginRenderPass`로 연 pass가 참조하는 framebuffer와 render pass가 그렇다. Vulkan은
+recording 중인 command buffer가 참조하는 이 둘을 파괴하는 것을 허용하지 않는다
+(VUID-vkEndCommandBuffer-commandBuffer-00059).
+
+그래서 encoder는 framebuffer를 `vkCmdEndRenderPass`에서 버리지 않는다. 다음
+`vkCmdBeginRenderPass`에서 버리고 새로 만들며, encoder가 사라질 때 마지막 하나를 버린다.
+두 시점 모두 그 레인의 fence가 신호된 뒤이고, encoder 소멸은 `waitIdle()` 뒤에 일어난다.
+
+이 때문에 encoder는 프레임마다 만들고 버리지 않는다. **레인마다 하나씩 오래 사는 객체**다.
+버리는 순간 위의 "기록이 끝난 뒤에 파괴한다"를 프레임 루프가 매번 다시 지켜야 한다.
+
 ### 의존성 순서
 
 **높은 수준의 리소스를 낮은 수준보다 먼저 파괴한다.**
@@ -210,8 +240,15 @@ Pipeline, Sampler  →  Buffer, Image
 
 ### 리사이즈와 파괴
 
-리사이즈는 §6의 순서를 따른다. 2번의 fence 대기가 곧 위 절차의 강제 실행이다.
-파괴를 별도 경로로 만들지 않고 같은 지연 파괴 경로를 쓴다.
+리사이즈는 §6의 순서를 따른다. 제출 fence 대기(`waitAllFences()`)에 더해
+`device.waitIdle()`을 부르고, 그 뒤에 지연 목록을 flush한다. fence 대기만으로는
+present가 swapchain을 놓아줬다는 보장이 없기 때문이다. 일반 리소스의 파괴는 별도 경로를
+만들지 않고 같은 지연 파괴 경로를 쓴다.
+
+종료도 같다. 마지막 프레임의 fence를 기다리고 `waitIdle()`을 부른 뒤에 semaphore와
+swapchain을 파괴한다. 이 두 대기가 없으면 검증 레이어가
+`VUID-vkDestroySemaphore-semaphore-05149`나 `VUID-vkDestroySwapchainKHR-swapchain-01282`로
+잡는다.
 
 ## 10. 핵심 원칙
 
@@ -221,7 +258,8 @@ Pipeline, Sampler  →  Buffer, Image
 4. present용 semaphore는 **이미지 인덱스**로 색인한다. `vkQueuePresentKHR`는 fence를 신호하지 않는다.
 5. 리소스는 fence 대기 없이 파괴하지 않는다. 지연 목록을 거쳐 파괴한다.
 6. 높은 수준의 리소스를 낮은 수준보다 먼저 파괴한다.
-7. 리사이즈에서는 GPU 사용이 끝난 뒤에 리소스를 파괴한다.
+7. 리사이즈·종료에서는 fence 대기에 더해 `device.waitIdle()`을 부른다. fence는 present 완료를 보장하지 않는다.
 8. 프레임 allocator는 `nxt_graphics`에 둔다. `core`는 프레임 수명을 모른다.
 9. 파이프라인 간 동기화는 Phase 3에서 넣는다. 필요한 게 없는데 넣으면 규칙 16 위반이다.
 10. `present`가 두 모듈을 가르는 기준이 된다: 그래픽스는 무엇을, 엔진은 언제를 한다.
+11. recording 중인 command buffer가 참조하는 framebuffer·render pass는 기록이 끝나기 전에 파괴하지 않는다.
