@@ -36,6 +36,11 @@ target_compile_definitions(nxt_graphics PRIVATE
     # 이 정의가 있어야 Vulkan-Hpp 함수가 vk::Result를 돌려주고 VK_CHECK가 성립한다.
     VULKAN_HPP_NO_EXCEPTIONS
 
+    # acquire/present의 VK_ERROR_OUT_OF_DATE_KHR을 정상 반환으로 취급한다.
+    # 이 정의가 없으면 Vulkan-Hpp가 우리 코드의 검사보다 먼저 assert로 끝낸다 —
+    # Debug에서만 죽고 Release에서는 조용히 지나가 원인을 찾기 어렵다 (frame.md §6).
+    VULKAN_HPP_HANDLE_ERROR_OUT_OF_DATE_AS_SUCCESS
+
     # 엔진 이름과 버전은 루트 project()가 단일 출처다. 그래서 코드에 박지 않고
     # 여기서 주입한다. project() 값은 add_subdirectory로 하위 스코프에 상속된다.
     NXT_PROJECT_NAME="${PROJECT_NAME}"
