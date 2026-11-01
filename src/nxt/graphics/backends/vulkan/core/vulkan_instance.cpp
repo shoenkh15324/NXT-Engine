@@ -20,8 +20,8 @@ namespace nxt::graphics::vulkan {
 
 namespace {
 
-/// @brief 애플리케이션 이름이다. 앱의 몫이라 InstanceDesc가 생기는 A6에서 옮긴다.
-constexpr const char* kApplicationName = "NXT Sandbox";
+/// @brief 검증 레이어 이름이다. SDK가 설치한 레이어 중 이 이름을 켠다.
+constexpr const char* kValidationLayerName = "VK_LAYER_KHRONOS_validation";
 
 /**
  * @brief 루트 project()의 버전을 Vulkan packed 버전으로 만든다.
@@ -88,6 +88,38 @@ void requireInstanceExtensions(const std::vector<const char*>& required) {
 }
 
 /**
+ * @brief 요청했을 때만 검증 레이어를 켠다.
+ *
+ * 레이어가 설치돼 있지 않으면 경고만 남기고 계속한다. 검증은 개발 편의이지
+ * 실행 조건이 아니기 때문이다. 반대로 켰는데 조용히 꺼지는 일은 없어야 하므로
+ * 켠 사실을 로그로 남긴다 (rhi.md §7).
+ *
+ * @param[in] desc 인스턴스 설정. enableValidation이 false면 빈 목록이다.
+ * @return 활성화할 레이어 이름 목록. createInstance가 쓰는 동안만 유효하다.
+ */
+[[nodiscard]]
+std::vector<const char*> enabledInstanceLayers(const rhi::InstanceDesc& desc) {
+    if (!desc.enableValidation) {
+        return {};
+    }
+
+    const auto enumerated = vk::enumerateInstanceLayerProperties();
+    VK_CHECK(enumerated.result);
+
+    const bool supported = std::any_of(enumerated.value.begin(), enumerated.value.end(), [](const auto& property) {
+        return std::strcmp(property.layerName, kValidationLayerName) == 0;
+    });
+
+    if (!supported) {
+        NXT_LOG_WARN(Graphics, Vulkan, "validation layer is not installed: {}", kValidationLayerName);
+        return {};
+    }
+
+    NXT_LOG_INFO(Graphics, Vulkan, "validation layer enabled: {}", kValidationLayerName);
+    return {kValidationLayerName};
+}
+
+/**
  * @brief vk::Instance에 debug messenger를 붙인다.
  *
  * 실패하면 종료한다. 메신저는 instance보다 먼저 파괴해야 하므로 소유자가 멤버로
@@ -110,7 +142,7 @@ vk::DebugUtilsMessengerEXT createDebugMessenger(vk::Instance instance) {
 
 } // namespace
 
-std::unique_ptr<VulkanInstance> VulkanInstance::create() {
+std::unique_ptr<VulkanInstance> VulkanInstance::create(const rhi::InstanceDesc& desc) {
     // 동적 디스패처는 instance가 없어도 전역 함수를 부를 수 있어야 한다.
     // 링크한 vulkan-1.lib의 vkGetInstanceProcAddr로 시작하고, instance가 생기면
     // 그 주소로 다시 채운다. 두 번 중 하나라도 빠지면 첫 호출에서 죽는다.
@@ -123,9 +155,11 @@ std::unique_ptr<VulkanInstance> VulkanInstance::create() {
         platformSurfaceExtension(),
     };
     requireInstanceExtensions(extensions);
+    const std::vector<const char*> layers = enabledInstanceLayers(desc);
+    const std::string appName{desc.appName};
 
     vk::ApplicationInfo applicationInfo{};
-    applicationInfo.pApplicationName = kApplicationName;
+    applicationInfo.pApplicationName = appName.c_str();
     applicationInfo.applicationVersion = projectVersion();
     applicationInfo.pEngineName = NXT_PROJECT_NAME;
     applicationInfo.engineVersion = projectVersion();
@@ -135,6 +169,12 @@ std::unique_ptr<VulkanInstance> VulkanInstance::create() {
     createInfo.pApplicationInfo = &applicationInfo;
     createInfo.enabledExtensionCount = static_cast<std::uint32_t>(extensions.size());
     createInfo.ppEnabledExtensionNames = extensions.data();
+
+    // 레이어를 켜지 않으면 count가 0이고 포인터도 null로 둔다.
+    if (!layers.empty()) {
+        createInfo.enabledLayerCount = static_cast<std::uint32_t>(layers.size());
+        createInfo.ppEnabledLayerNames = layers.data();
+    }
 
     const auto created = vk::createInstance(createInfo);
     VK_CHECK(created.result);
@@ -146,7 +186,8 @@ std::unique_ptr<VulkanInstance> VulkanInstance::create() {
     auto result = std::unique_ptr<VulkanInstance>(new VulkanInstance(instance));
     result->debugMessenger_ = createDebugMessenger(instance);
 
-    NXT_LOG_INFO(Graphics, Vulkan, "vulkan instance created, extensions={}", extensions.size());
+    NXT_LOG_INFO(Graphics, Vulkan, "vulkan instance created, extensions={}, layers={}", extensions.size(),
+                 layers.size());
     return result;
 }
 
@@ -201,8 +242,8 @@ VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE
 
 namespace nxt::graphics::rhi {
 
-std::unique_ptr<Instance> Instance::create() {
-    return vulkan::VulkanInstance::create();
+std::unique_ptr<Instance> Instance::create(const rhi::InstanceDesc& desc) {
+    return vulkan::VulkanInstance::create(desc);
 }
 
 } // namespace nxt::graphics::rhi
