@@ -139,10 +139,16 @@ void endCommandBuffer(const Device& device, const CommandBuffer& commandBuffer);
  * beginCommandBuffer()와 endCommandBuffer() 사이에서만 유효하다.
  *
  * render pass는 형식만으로 정해지므로 encoder가 들고 있다가 재사용하고, framebuffer는
- * view에 묶이므로 pass마다 만들고 버린다. 그 상태와 해제 순서 때문에 Swapchain과
- * 같이 추상 클래스가 되었다 (phase0.md "RHI 타입은 두 패턴").
+ * view에 묶이므로 pass마다 만들되 파괴는 다음 pass로 미룬다. 그 상태와 해제 순서 때문에
+ * Swapchain과 같이 추상 클래스가 되었다 (phase0.md "RHI 타입은 두 패턴").
  *
- * @note 소유권: CommandEncoder::create()가 만들고 unique_ptr이 파괴한다.
+ * @note 파괴 시점: framebuffer와 render pass는 recording 중인 command buffer가 참조하는
+ *       동안 파괴할 수 없다. 그래서 endRenderPass()가 아니라 다음 beginRenderPass()와
+ *       encoder 소멸자에서 파괴한다. 소멸자는 그 레인의 fence 신호와 device.waitIdle()
+ *       뒤에만 불려야 한다 — 호출자(프레임 루프)의 계약이다.
+ * @note 소유권: CommandEncoder::create()가 만들고, 프레임 루프가 레인마다 하나씩
+ *       소유한다. 프레임마다 만들고 버리지 않는다 — 버리는 순간 위의 파괴 시점 규칙을
+ *       어기게 된다.
  * @note Thread safety: thread-safe하지 않다. command buffer와 같은 스레드에서 쓴다.
  */
 class CommandEncoder {

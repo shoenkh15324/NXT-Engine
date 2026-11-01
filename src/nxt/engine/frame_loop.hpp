@@ -56,8 +56,9 @@ using RecordFunction = std::function<void(rhi::CommandEncoder& encoder, const Fr
  * 따로 둔다 (frame.md §5).
  *
  * @note create()가 만들고 unique_ptr이 파괴한다. 직접 만들지 않는다.
- * @note 소유권: 이 객체는 프레임 레인 자원과 지연 파괴 목록을 소유한다. Device와
- *       Swapchain은 빌려 쓴다 — 둘 다 이 객체보다 오래 살아야 한다.
+ * @note 소유권: 이 객체는 프레임 레인 자원(command buffer · encoder · fence · semaphore)과
+ *       지연 파괴 목록을 소유한다. Device와 Swapchain은 빌려 쓴다 — 둘 다 이 객체보다
+ *       오래 살아야 한다.
  * @note Thread safety: thread-safe하지 않다. 프레임 루프는 하나의 스레드에서 돈다.
  */
 class FrameLoop final {
@@ -110,13 +111,16 @@ public:
     Status frame();
 
     /**
-     * @brief 창 크기에 맞춰 swapchain을 다시 만들고 프레임 레인을 재조정한다.
+     * @brief 창 크기에 맞춰 swapchain과 프레임 레인을 함께 다시 만든다.
      *
-     * 리사이즈 순서를 이 함수가 지킨다 (frame.md §6): in-flight fence를 모두 기다린 뒤
-     * 지연 파괴를 비우고, swapchain을 재생성한다. 이미지 개수가 바뀌었으면 fence와
-     * semaphore, command buffer도 새 개수로 다시 만든다.
+     * 리사이즈 순서를 이 함수가 지킨다 (frame.md §6): in-flight fence를 모두 기다리고,
+     * device를 idle로 만든 뒤, 레인을 버리고 swapchain을 재생성하고, 레인을 새로 만든다.
      *
-     * @note 최소화처럼 그릴 영역이 없으면 swapchain이 바뀌지 않으므로 레인도 그대로 둔다.
+     * @note 이미지 개수가 같아도 레인을 다시 만든다. present가 실패하면 그 semaphore의
+     *       wait이 수행되지 않아 신호된 채 남을 수 있고, 남은 신호를 물려받으면 다음
+     *       제출이 거부되기 때문이다.
+     * @note 최소화처럼 그릴 영역이 없으면 swapchain이 바뀌지 않는다. 그래도 레인은
+     *       새로 만든다 — 이전 상태를 물려받지 않는 편이 단순하다.
      */
     void recreate();
 
@@ -155,6 +159,9 @@ private:
 
     /// @brief 레인마다 하나씩 있는 command buffer. 매 프레임 다시 기록한다.
     std::vector<rhi::CommandBuffer> commandBuffers_;
+
+    /// @brief 레인마다 하나씩 있는 encoder. 기록이 끝나도 버리지 않고 재사용한다.
+    std::vector<std::unique_ptr<rhi::CommandEncoder>> encoders_;
 
     /// @brief 레인마다 하나씩 있는 fence. 백프레시와 지연 파괴의 근거다.
     std::vector<rhi::Fence> fences_;

@@ -133,9 +133,9 @@ public:
     /**
      * @brief 현재 Surface 크기로 swapchain과 image view들을 다시 만든다.
      *
-     * 창 크기가 바뀌면 swapchain이 무효가 된다. 호출 전에 in-flight 프레임의
-     * fence를 모두 기다려야 한다 — GPU가 아직 쓰는 이미지를 파괴하면
-     * use-after-free다 (frame.md §6, §9).
+     * 창 크기가 바뀌면 swapchain이 무효가 된다. 호출 전에 device.waitIdle()로
+     * present까지 끝내야 한다 — fence만 기다리면 submit은 끝나도 present가 큐에 남아
+     * swapchain을 붙잡고 있을 수 있다 (frame.md §6, §9).
      *
      * @note 크기를 인자로 받지 않는 이유는 Surface의 capabilities(currentExtent)가
      *       이미 창 크기를 알려 주기 때문이다. 크기를 넘기면 호출자마다 창 크기와

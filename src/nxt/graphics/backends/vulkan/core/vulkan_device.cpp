@@ -164,6 +164,13 @@ rhi::Queue VulkanDevice::presentQueue() const noexcept {
     return fromVkHandle<rhi::QueueTag>(presentQueue_);
 }
 
+void VulkanDevice::waitIdle() const {
+    // fence는 submit 완료만 알려 준다. present는 큐 연산이라 여기서 함께 기다린다.
+    // VULKAN_HPP_NO_EXCEPTIONS에서는 vk::Device::waitIdle()이 Result를 그대로
+    // 돌려주므로 VK_CHECK에 바로 넘길 수 있다.
+    VK_CHECK(device_.waitIdle());
+}
+
 const VulkanDevice& toVulkanDevice(const rhi::Device& device) noexcept {
     NXT_ASSERT_MSG(dynamic_cast<const VulkanDevice*>(&device) != nullptr, "Vulkan 백엔드가 아닌 Device를 넘겼다.");
     return static_cast<const VulkanDevice&>(device);

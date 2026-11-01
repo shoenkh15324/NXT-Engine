@@ -43,6 +43,9 @@ public:
     [[nodiscard]]
     rhi::Queue presentQueue() const noexcept override;
 
+    /// @brief 제출된 모든 GPU 작업이 끝날 때까지 기다린다 (리사이즈·종료 경로).
+    void waitIdle() const override;
+
     /// @brief backend 구현부가 vk::Device를 얻는 통로이다 (fence · semaphore · memory).
     [[nodiscard]]
     vk::Device device() const noexcept {
