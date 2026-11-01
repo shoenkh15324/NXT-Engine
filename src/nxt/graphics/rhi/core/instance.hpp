@@ -3,11 +3,41 @@
 #include <memory>
 #include <nxt/graphics/rhi/common/handle.hpp>
 #include <nxt/platform/window/window.hpp>
+#include <string_view>
 
 namespace nxt::graphics::rhi {
 
+/**
+ * @brief Debug 빌드에서 검증 레이어를 기본으로 켠다.
+ *
+ * NDEBUG는 Release 계열에서 정의된다. 그래서 Debug에서만 true다.
+ */
+#if !defined(NDEBUG)
+inline constexpr bool kDefaultValidation = true;
+#else
+inline constexpr bool kDefaultValidation = false;
+#endif
+
 struct DeviceDesc;
 class Device;
+
+/**
+ * @brief Instance를 만드는 데 필요한 설정이다.
+ *
+ * 모든 필드에 기본값이 있으므로 앱은 필요한 것만 지정한다.
+ */
+struct InstanceDesc {
+    /// @brief Vulkan에 알릴 어플리케이션 이름이다. create() 호출 중 유효하면 충분하다.
+    std::string_view appName{"NXT Engine"};
+
+    /**
+     * @brief 검증 레이어를 켤지 여부다.
+     *
+     * 기본값은 Debug에서 true다. 레이어가 설치돼 있지 않으면 경고만 남기고
+     * 계속한다 — SDK가 없는 머신에서도 앱이 떠야 하기 때문이다 (rhi.md §7).
+     */
+    bool enableValidation = kDefaultValidation;
+};
 
 /// @brief Surface를 다른 종류의 리소스와 구분하기 위한 빈 태그이다.
 struct SurfaceTag {};
@@ -34,7 +64,7 @@ using Surface = ResourceHandle<SurfaceTag>;
  * 수행할 Device를 만든다 (rhi.md §8).
  *
  * @code
- * auto instance = rhi::Instance::create();
+ * auto instance = rhi::Instance::create({.appName = "NXT Sandbox"});
  * auto surface = instance->createSurface(window->native());
  * auto device = instance->createDevice(desc);
  * @endcode
@@ -52,13 +82,15 @@ public:
     /**
      * @brief Vulkan 인스턴스를 만든다.
      *
-     * 지원 instance extension을 확인하고 필요한 것만 켠다. 실패하면 원인을
-     * 로그로 남기고 종료한다 — GPU 오류는 복구 불가능하다 (rhi.md §7).
+     * 지원 instance extension을 확인하고 필요한 것만 켠다. desc.enableValidation이
+     * true면 검증 레이어도 켠다. 실패하면 원인을 로그로 남기고 종료한다 — GPU 오류는
+     * 복구 불가능하다 (rhi.md §7).
      *
+     * @param[in] desc 앱 이름과 검증 레이어 설정.
      * @return 만들어진 인스턴스.
      */
     [[nodiscard]]
-    static std::unique_ptr<Instance> create();
+    static std::unique_ptr<Instance> create(const InstanceDesc& desc);
 
     /**
      * @brief 창 위에 그릴 Surface를 만든다.

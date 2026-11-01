@@ -26,13 +26,14 @@ public:
      *
      * 필요한 instance extension을 확인하고 켠다. VK_KHR_surface와
      * VK_EXT_debug_utils는 공통이고, 나머지 surface extension은 플랫폼 구현이
-     * 정한다 (vulkan_instance_<platform>.cpp). 실패하면 원인을 로그로 남기고
-     * 종료한다 — GPU 오류는 복구 불가능하다 (rhi.md §7).
+     * 정한다 (vulkan_instance_<platform>.cpp). desc.enableValidation이 true면
+     * 검증 레이어도 켠다. 실패하면 원인을 로그로 남기고 종료한다 (rhi.md §7).
      *
+     * @param[in] desc 앱 이름과 검증 레이어 설정.
      * @return 만들어진 인스턴스.
      */
     [[nodiscard]]
-    static std::unique_ptr<VulkanInstance> create();
+    static std::unique_ptr<VulkanInstance> create(const rhi::InstanceDesc& desc);
 
     /**
      * @brief 남은 surface와 debug messenger를 정리한 뒤 vk::Instance를 파괴한다.
