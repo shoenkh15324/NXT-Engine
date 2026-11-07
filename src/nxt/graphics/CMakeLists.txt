@@ -80,4 +80,5 @@ target_sources(nxt_graphics
             rhi/frame/resource_deletion.hpp
             rhi/resource/memory.hpp
             rhi/resource/image.hpp
+            rhi/resource/shader.hpp
 )
