@@ -798,13 +798,13 @@ A7이 "검증 레이어 ON"을 통과 조건으로 둔 이유가 이것이다.
 
 ## B1. 수학
 
-- [ ] `src/nxt/math/{vec3,mat4}.hpp` — `nxt_math` target, namespace `nxt::math`
+- [x] `src/nxt/math/{vec3,mat4}.hpp` — `nxt_math` target, namespace `nxt::math`
 
 ## B2. 셰이더
 
-- [ ] `shaders/triangle.vert` · `triangle.frag`
+- [x] `shaders/triangle.vert` · `triangle.frag`
 - [x] CMake 셰이더 컴파일 규칙 — `cmake/CompileShaders.cmake`
-- [ ] `nxt_add_shader`로 SPIR-V 등록
+- [x] `nxt_add_shader`로 SPIR-V 등록
 - [ ] `graphics/rhi/resource/shader.hpp` + `resource/vulkan_shader.cpp`
 
 ## B3. 파이프라인
