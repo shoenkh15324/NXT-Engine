@@ -20,7 +20,9 @@ function(nxt_add_shader out_var source)
         message(FATAL_ERROR "shader not found: ${CMAKE_CURRENT_SOURCE_DIR}/${source}")
     endif()
 
-    get_filename_component(shader_name "${source}" NAME_WE)
+    # 확장자를 포함해야 한다. NAME_WE를 쓰면 triangle.vert와 triangle.frag가
+    # 둘 다 triangle.spv가 되어 custom command 출력이 충돌한다.
+    get_filename_component(shader_name "${source}" NAME)
     set(spv "${CMAKE_CURRENT_BINARY_DIR}/${shader_name}.spv")
 
     add_custom_command(
