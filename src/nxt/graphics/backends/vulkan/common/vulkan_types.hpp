@@ -36,6 +36,12 @@ inline vk::Format toVulkan(rhi::Format format) noexcept {
             return vk::Format::eD24UnormS8Uint;
         case rhi::Format::D32SFloatS8Uint:
             return vk::Format::eD32SfloatS8Uint;
+        case rhi::Format::R32G32Sfloat:
+            return vk::Format::eR32G32Sfloat;
+        case rhi::Format::R32G32B32Sfloat:
+            return vk::Format::eR32G32B32Sfloat;
+        case rhi::Format::R32G32B32A32Sfloat:
+            return vk::Format::eR32G32B32A32Sfloat;
     }
 
     NXT_ASSERT(false && "rhi::Format 값이 매핑되지 않았다.");
@@ -219,6 +225,36 @@ template <typename Tag, typename VkHandle>
 inline rhi::ResourceHandle<Tag> fromVkHandle(VkHandle handle) noexcept {
     return rhi::ResourceHandle<Tag>::fromValue(
         reinterpret_cast<std::uint64_t>(static_cast<typename VkHandle::CType>(handle)));
+}
+
+/// @brief rhi::CullMode을 대응하는 vk::CullModeFlags로 옮긴다.
+[[nodiscard]]
+inline vk::CullModeFlags toVulkan(rhi::CullMode mode) noexcept {
+    switch (mode) {
+        case rhi::CullMode::None:
+            return {};
+        case rhi::CullMode::Front:
+            return vk::CullModeFlagBits::eFront;
+        case rhi::CullMode::Back:
+            return vk::CullModeFlagBits::eBack;
+    }
+
+    NXT_ASSERT(false && "rhi::CullMode 값이 매핑되지 않았다");
+    return {};
+}
+
+/// @brief rhi::FrontFace을 대응하는 vk::FrontFace로 옮긴다.
+[[nodiscard]]
+inline vk::FrontFace toVulkan(rhi::FrontFace frontFace) noexcept {
+    switch (frontFace) {
+        case rhi::FrontFace::CounterClockwise:
+            return vk::FrontFace::eCounterClockwise;
+        case rhi::FrontFace::Clockwise:
+            return vk::FrontFace::eClockwise;
+    }
+
+    NXT_ASSERT(false && "rhi::FrontFace 값이 매핑되지 않았다");
+    return vk::FrontFace::eCounterClockwise;
 }
 
 } // namespace nxt::graphics::vulkan

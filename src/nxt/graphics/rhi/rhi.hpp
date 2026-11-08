@@ -17,4 +17,5 @@
 #include <nxt/graphics/rhi/frame/swapchain.hpp>
 #include <nxt/graphics/rhi/resource/image.hpp>
 #include <nxt/graphics/rhi/resource/memory.hpp>
+#include <nxt/graphics/rhi/resource/pipeline.hpp>
 #include <nxt/graphics/rhi/resource/shader.hpp>
