@@ -58,6 +58,7 @@ target_sources(nxt_graphics
         resource/vulkan_memory.cpp
         resource/vulkan_shader.cpp
         resource/vulkan_pipeline.cpp
+        resource/vulkan_buffer.cpp
         frame/vulkan_swapchain.cpp
         frame/vulkan_command_buffer.cpp
         frame/vulkan_fence.cpp
