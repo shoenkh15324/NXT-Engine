@@ -809,7 +809,7 @@ A7이 "검증 레이어 ON"을 통과 조건으로 둔 이유가 이것이다.
 
 ## B3. 파이프라인
 
-- [ ] `graphics/rhi/resource/pipeline.hpp` + `resource/vulkan_pipeline.cpp`
+- [x] `graphics/rhi/resource/pipeline.hpp` + `resource/vulkan_pipeline.cpp`
   — GraphicsPipeline, VertexLayout, rasterizer 상태
 
 ## B4. 버퍼와 이미지

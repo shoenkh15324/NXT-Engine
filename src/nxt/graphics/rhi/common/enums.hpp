@@ -28,6 +28,12 @@ enum class Format : std::uint8_t {
     D24UnormS8Uint,
     /// @brief 깊이 32비트 부동소수점과 스텐실 8비트.
     D32SFloatS8Uint,
+    /// @brief 32비트 부동소수점 두 개. 정점 속성에 쓴다. 범위는 [0, 1]이 아니다.
+    R32G32Sfloat,
+    /// @brief 32비트 부동소수점 세 개. 정점 위치에 쓴다. 범위는 [0, 1]이 아니다.
+    R32G32B32Sfloat,
+    /// @brief 32비트 부동소수점 네 개. 정점 속성에 쓴다. 범위는 [0, 1]이 아니다.
+    R32G32B32A32Sfloat,
 };
 
 /**
@@ -92,6 +98,29 @@ enum class IndexType : std::uint8_t {
     U16 = 0,
     /// @brief 원소당 32비트 부호 없는 정수.
     U32,
+};
+
+/**
+ * @brief 삼각형의 면을 어느 쪽에서 볼 때 버릴지 정한다.
+ *
+ * VkCullModeFlagBits를 옮긴 것이다. NXT는 면 하나만 버린다 — 앞뒤를 동시에
+ * 버리는 조합은 쓰지 않는다.
+ */
+enum class CullMode : std::uint8_t {
+    /// @brief 어느 면도 버리지 않는다. 파이프라인을 만들 때는 빈 플래그가 된다.
+    None = 0,
+    /// @brief 앞면을 버린다.
+    Front,
+    /// @brief 뒷면을 버린다. NXT의 기본값이다.
+    Back,
+};
+
+/// @brief 정점이 감기는 두 방향 중 어느 쪽을 앞면으로 볼지 정한다.
+enum class FrontFace : std::uint8_t {
+    /// @brief 반시계 방향으로 감긴 면을 앞면으로 본다. Vulkan의 기본값이다.
+    CounterClockwise = 0,
+    /// @brief 시계 방향으로 감긴 면을 앞면으로 본다.
+    Clockwise,
 };
 
 /**
