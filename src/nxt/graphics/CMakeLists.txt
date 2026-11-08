@@ -82,4 +82,5 @@ target_sources(nxt_graphics
             rhi/resource/image.hpp
             rhi/resource/shader.hpp
             rhi/resource/pipeline.hpp
+            rhi/resource/buffer.hpp
 )

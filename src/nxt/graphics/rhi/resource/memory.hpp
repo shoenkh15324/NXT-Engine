@@ -77,11 +77,14 @@ constexpr MemoryProperty& operator|=(MemoryProperty& lhs, MemoryProperty rhs) no
  * @param[in] device 할당에 쓸 디바이스.
  * @param[in] size 할당할 바이트 수. 0은 실패한다.
  * @param[in] required 필요한 메모리 성질.
+ * @param[in] memoryTypeBits 이 리소스가 쓸 수 있는 memory type 비트 집합. 버퍼·이미지는
+ *            자기 요구 사항의 값을 넘기고, 리소스가 없으면 기본값(모든 타입)을 쓴다.
  *
  * @return 할당된 메모리.
  */
 [[nodiscard]]
-Memory allocateMemory(const Device& device, std::uint64_t size, MemoryProperty required);
+Memory allocateMemory(const Device& device, std::uint64_t size, MemoryProperty required,
+                      std::uint32_t memoryTypeBits = 0xFFFFFFFFU);
 
 /**
  * @brief GPU 메모리를 해제한다.

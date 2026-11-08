@@ -814,7 +814,7 @@ A7이 "검증 레이어 ON"을 통과 조건으로 둔 이유가 이것이다.
 
 ## B4. 버퍼와 이미지
 
-- [ ] `graphics/rhi/resource/buffer.hpp` + `resource/vulkan_buffer.cpp`
+- [x] `graphics/rhi/resource/buffer.hpp` + `resource/vulkan_buffer.cpp`
 - [ ] `graphics/rhi/resource/image.hpp` + `resource/vulkan_image.cpp`
 
 **깊이 버퍼를 여기서 넣는다.** 삼각형 하나에는 시각적으로 필요 없지만, 나중에 넣으면

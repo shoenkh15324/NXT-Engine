@@ -15,6 +15,7 @@
 #include <nxt/graphics/rhi/frame/resource_deletion.hpp>
 #include <nxt/graphics/rhi/frame/semaphore.hpp>
 #include <nxt/graphics/rhi/frame/swapchain.hpp>
+#include <nxt/graphics/rhi/resource/buffer.hpp>
 #include <nxt/graphics/rhi/resource/image.hpp>
 #include <nxt/graphics/rhi/resource/memory.hpp>
 #include <nxt/graphics/rhi/resource/pipeline.hpp>

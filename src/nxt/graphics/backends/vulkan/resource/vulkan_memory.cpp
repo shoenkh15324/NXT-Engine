@@ -54,15 +54,14 @@ std::uint32_t findMemoryTypeIndex(vk::PhysicalDevice physicalDevice, std::uint32
 
 namespace nxt::graphics::rhi {
 
-Memory allocateMemory(const Device& device, std::uint64_t size, MemoryProperty required) {
+Memory allocateMemory(const Device& device, std::uint64_t size, MemoryProperty required, std::uint32_t memoryTypeBits) {
     NXT_ASSERT_MSG(size > 0, "0바이트 메모리는 할당할 수 없다.");
 
     const vulkan::VulkanDevice& backend = vulkan::toVulkanDevice(device);
 
-    // 아직 버퍼·이미지가 없으므로 모든 memory type을 후보로 둔다. B4에서
-    // vkGetBufferMemoryRequirements가 준 typeBits를 넘기는 경로가 생긴다.
-    constexpr std::uint32_t kAllMemoryTypes = 0xFFFFFFFFU;
-    const std::uint32_t typeIndex = vulkan::findMemoryTypeIndex(backend.physicalDevice(), kAllMemoryTypes, required);
+    // 호출자가 넘긴 비트 안에서만 고른다. 버퍼·이미지는 자기 요구 사항의
+    // memoryTypeBits를 넘기고, 그 밖의 호출은 기본값(모든 타입)을 쓴다.
+    const std::uint32_t typeIndex = vulkan::findMemoryTypeIndex(backend.physicalDevice(), memoryTypeBits, required);
 
     vk::MemoryAllocateInfo allocateInfo{};
     allocateInfo.allocationSize = size;
