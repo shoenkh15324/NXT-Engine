@@ -828,15 +828,15 @@ depth는 어차피 Phase 3에 존재한다. 그때 넣으면 Phase 0의 렌더 �
 
 ## B5. 렌더러
 
-- [ ] `renderer/mesh/mesh.hpp` — CPU 정점
-- [ ] `renderer/passes/triangle_pass.{hpp,cpp}`
+- [x] `renderer/mesh/mesh.hpp` — CPU 정점
+- [x] `renderer/passes/triangle_pass.{hpp,cpp}`
 
 ## B6. 0-B 검증
 
-- [ ] 삼각형이 보인다
-- [ ] 깊이 테스트가 켜져 있고 뒤쪽 삼각형이 가려진다
-- [ ] `grep -rn "vk::" src/nxt/graphics/rhi/` → **0건**
-- [ ] `grep -rn "backends/vulkan" src/nxt/renderer/ src/nxt/engine/` → **0건**
+- [x] 삼각형이 보인다
+- [x] 깊이 테스트가 켜져 있고 뒤쪽 삼각형이 가려진다
+- [x] `grep -rn "vk::" src/nxt/graphics/rhi/` → **0건**
+- [x] `grep -rn "backends/vulkan" src/nxt/renderer/ src/nxt/engine/` → **0건**
 
 두 grep이 실패하면 RHI 경계가 이미 붕괴한 것이다. 여기서 고치지 않으면 이후 수정 비용이 배가된다.
 
