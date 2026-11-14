@@ -29,6 +29,12 @@ struct FrameTarget {
     /// @brief color의 픽셀 형식이다. swapchain.format()이 준 값이다.
     rhi::Format colorFormat = rhi::Format::Undefined;
 
+    /// @brief 이번 프레임의 깊이 부착물이다. 프레임 루프가 만든 깊이 이미지의 view이다.
+    rhi::ImageView depth;
+
+    /// @brief depth의 픽셀 형식이다. 깊이 이미지를 만들 때 쓴 형식이다.
+    rhi::Format depthFormat = rhi::Format::Undefined;
+
     /// @brief 렌더 영역의 크기다. swapchain.extent()가 준 값이다.
     rhi::Extent2D extent;
 
@@ -57,12 +63,18 @@ using RecordFunction = std::function<void(rhi::CommandEncoder& encoder, const Fr
  *
  * @note create()가 만들고 unique_ptr이 파괴한다. 직접 만들지 않는다.
  * @note 소유권: 이 객체는 프레임 레인 자원(command buffer · encoder · fence · semaphore)과
- *       지연 파괴 목록을 소유한다. Device와 Swapchain은 빌려 쓴다 — 둘 다 이 객체보다
- *       오래 살아야 한다.
+ *       깊이 이미지 · view, 지연 파괴 목록을 소유한다. Device와 Swapchain은 빌려 쓴다 —
+ *       둘 다 이 객체보다 오래 살아야 한다.
  * @note Thread safety: thread-safe하지 않다. 프레임 루프는 하나의 스레드에서 돈다.
  */
 class FrameLoop final {
 public:
+    /// @brief 깊이 버퍼의 형식이다. swapchain 형식과 무관하게 하나로 고정한다.
+    ///
+    /// FrameTarget.depthFormat과 renderer의 파이프라인이 같은 값을 써야 한다.
+    /// 그래서 한 곳에서만 정하고 밖에서도 읽을 수 있게 공개한다.
+    static constexpr rhi::Format kDepthFormat = rhi::Format::D32SFloat;
+
     /// @brief frame()이 돌려주는 결과다.
     enum class Status : std::uint8_t {
         /// @brief 제출과 제시까지 끝났다.
@@ -142,8 +154,20 @@ private:
     /// @brief 프레임 레인을 모두 파괴한다.
     void destroyFrames();
 
+    /// @brief swapchain 크기에 맞는 깊이 이미지와 view를 만든다.
+    void createDepthTarget();
+
+    /// @brief 깊이 view와 이미지를 파괴한다. view를 먼저 지운다.
+    void destroyDepthTarget();
+
     /// @brief in-flight fence를 모두 기다린다. 리사이즈와 종료 경로가 쓴다.
     void waitAllFences();
+
+    /// @brief 프레임 루프가 소유하는 깊이 이미지이다. swapchain 크기가 바뀌면 다시 만든다.
+    rhi::ImageAllocation depthImage_{};
+
+    /// @brief depthImage_의 view이다. FrameTarget으로 넘긴다.
+    rhi::ImageView depthView;
 
     /// @brief 프레임 레인 자원을 만드는 디바이스. 이 객체보다 오래 산다.
     const rhi::Device& device_;
