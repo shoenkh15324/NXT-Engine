@@ -2,7 +2,13 @@ add_executable(sandbox main.cpp)
 
 # nxt_core를 직접 링크한다. main.cpp가 nxt/core를 include하므로
 # nxt_platform의 public 전이에 의존하지 않는다.
-target_link_libraries(sandbox PRIVATE nxt_core nxt_platform nxt_graphics nxt_engine)
+target_link_libraries(sandbox PRIVATE
+    nxt_core
+    nxt_platform
+    nxt_graphics
+    nxt_renderer
+    nxt_engine
+)
 
 # GLSL을 SPIR-V로 컴파일한다.
 # nxt_add_shader는 CMAKE_CURRENT_SOURCE_DIR 기준으로 소스를 찾으므로,
