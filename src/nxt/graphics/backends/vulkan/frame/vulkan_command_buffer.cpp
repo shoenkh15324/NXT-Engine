@@ -1,3 +1,4 @@
+#include <array>
 #include <cstdint>
 #include <memory>
 #include <nxt/core/diagnostics/assert.hpp>
@@ -14,44 +15,64 @@ namespace nxt::graphics::vulkan {
 namespace {
 
 /**
- * @brief 색 부착물 하나짜리 render pass를 만든다.
+ * @brief 색 부착물과 깊이 부착물을 가진 render pass를 만든다.
  *
  * Phase 0은 단일 render pass다 (rhi.md §10). load op과 store op을 인자로 받지 않는
  * 이유는 값이 하나뿐이어서다 — swapchain 이미지의 내용은 acquire할 때마다 보장되지
  * 않으므로 매 프레임 clear할 수밖에 없고, 제시할 결과는 반드시 남겨야 한다
- * (frame.md §4). 깊이 부착물이 생기면 B4에서 이 함수가 넓어진다.
+ * (frame.md §4). 깊이는 그리기 중에만 쓰이므로 clear하고 남기지 않는다.
  *
- * @param[in] device render pass를 만들 디바이스.
- * @param[in] format 색 부착물의 형식. view 핸들로는 조회할 수 없어 호출자가 준다.
+ * backend의 resource/vulkan_pipeline.cpp에 있는 createCompatibleRenderPass()와 부착물 ·
+ * subpass 구성이 같아야 한다. 한쪽만 고치면 그리기에서 pipeline incompatibility가 난다.
+ *
+ * @param[in] device      render pass를 만들 디바이스.
+ * @param[in] colorFormat 색 부착물의 형식. view 핸들로는 조회할 수 없어 호출자가 준다.
+ * @param[in] depthFormat 깊이 부착물의 형식. 같은 이유로 호출자가 준다.
  * @return 만들어진 render pass.
  */
 [[nodiscard]]
-vk::RenderPass createColorRenderPass(vk::Device device, rhi::Format format) {
-    vk::AttachmentDescription attachment{};
-    attachment.format = toVulkan(format);
-    attachment.samples = vk::SampleCountFlagBits::e1;
-    attachment.loadOp = vk::AttachmentLoadOp::eClear;
-    attachment.storeOp = vk::AttachmentStoreOp::eStore;
-    attachment.stencilLoadOp = vk::AttachmentLoadOp::eDontCare;
-    attachment.stencilStoreOp = vk::AttachmentStoreOp::eDontCare;
+vk::RenderPass createRenderPass(vk::Device device, rhi::Format colorFormat, rhi::Format depthFormat) {
+    std::array<vk::AttachmentDescription, 2> attachments{};
+
+    attachments[0].format = toVulkan(colorFormat);
+    attachments[0].samples = vk::SampleCountFlagBits::e1;
+    attachments[0].loadOp = vk::AttachmentLoadOp::eClear;
+    attachments[0].storeOp = vk::AttachmentStoreOp::eStore;
+    attachments[0].stencilLoadOp = vk::AttachmentLoadOp::eDontCare;
+    attachments[0].stencilStoreOp = vk::AttachmentStoreOp::eDontCare;
     // eUndefined는 "이전 내용을 보지 않는다"는 뜻이라 clear와 짝이 맞다.
-    attachment.initialLayout = vk::ImageLayout::eUndefined;
+    attachments[0].initialLayout = vk::ImageLayout::eUndefined;
     // 이 pass가 마지막이므로 present가 읽을 수 있는 layout으로 끝낸다. 그래야
     // vkQueuePresentKHR 앞에 별도 barrier를 넣지 않아도 된다 (frame.md §8).
-    attachment.finalLayout = vk::ImageLayout::ePresentSrcKHR;
+    attachments[0].finalLayout = vk::ImageLayout::ePresentSrcKHR;
+
+    attachments[1].format = toVulkan(depthFormat);
+    attachments[1].samples = vk::SampleCountFlagBits::e1;
+    attachments[1].loadOp = vk::AttachmentLoadOp::eClear;
+    // 이 pass 밖에서 깊이를 읽지 않는다. 남기지 않아도 다음 프레임이 다시 clear한다.
+    attachments[1].storeOp = vk::AttachmentStoreOp::eDontCare;
+    attachments[1].stencilLoadOp = vk::AttachmentLoadOp::eDontCare;
+    attachments[1].stencilStoreOp = vk::AttachmentStoreOp::eDontCare;
+    attachments[1].initialLayout = vk::ImageLayout::eUndefined;
+    attachments[1].finalLayout = vk::ImageLayout::eDepthStencilAttachmentOptimal;
 
     vk::AttachmentReference colorReference{};
     colorReference.attachment = 0;
     colorReference.layout = vk::ImageLayout::eColorAttachmentOptimal;
 
+    vk::AttachmentReference depthReference{};
+    depthReference.attachment = 1;
+    depthReference.layout = vk::ImageLayout::eDepthStencilAttachmentOptimal;
+
     vk::SubpassDescription subpass{};
     subpass.pipelineBindPoint = vk::PipelineBindPoint::eGraphics;
     subpass.colorAttachmentCount = 1;
     subpass.pColorAttachments = &colorReference;
+    subpass.pDepthStencilAttachment = &depthReference;
 
     vk::RenderPassCreateInfo createInfo{};
-    createInfo.attachmentCount = 1;
-    createInfo.pAttachments = &attachment;
+    createInfo.attachmentCount = static_cast<std::uint32_t>(attachments.size());
+    createInfo.pAttachments = attachments.data();
     createInfo.subpassCount = 1;
     createInfo.pSubpasses = &subpass;
 
@@ -61,21 +82,27 @@ vk::RenderPass createColorRenderPass(vk::Device device, rhi::Format format) {
 }
 
 /**
- * @brief 색 부착물 하나를 붙인 framebuffer를 만든다.
+ * @brief 색 부착물과 깊이 부착물을 붙인 framebuffer를 만든다.
+ *
+ * attachment 순서는 render pass의 attachment 순서와 같아야 한다. 0번이 색,
+ * 1번이 깊이다.
  *
  * @param[in] device     framebuffer를 만들 디바이스.
  * @param[in] renderPass 이 framebuffer가 쓰는 render pass.
- * @param[in] view       색 부착물로 쓸 image view.
+ * @param[in] color      색 부착물로 쓸 view.
+ * @param[in] depth      깊이 부착물로 쓸 view.
  * @param[in] extent     framebuffer의 크기.
  * @return 만들어진 framebuffer.
  */
 [[nodiscard]]
-vk::Framebuffer createColorFramebuffer(vk::Device device, vk::RenderPass renderPass, vk::ImageView view,
-                                       const rhi::Extent2D& extent) {
+vk::Framebuffer createFramebuffer(vk::Device device, vk::RenderPass renderPass, vk::ImageView color,
+                                  vk::ImageView depth, const rhi::Extent2D& extent) {
+    const std::array<vk::ImageView, 2> attachments{color, depth};
+
     vk::FramebufferCreateInfo createInfo{};
     createInfo.renderPass = renderPass;
-    createInfo.attachmentCount = 1;
-    createInfo.pAttachments = &view;
+    createInfo.attachmentCount = static_cast<std::uint32_t>(attachments.size());
+    createInfo.pAttachments = attachments.data();
     createInfo.width = extent.width;
     createInfo.height = extent.height;
     createInfo.layers = 1;
@@ -88,7 +115,7 @@ vk::Framebuffer createColorFramebuffer(vk::Device device, vk::RenderPass renderP
 /**
  * @brief rhi::CommandEncoder의 Vulkan 구현이다.
  *
- * render pass는 이 객체가 들고 있는다. 형식만으로 정해지고 image view와 무관하므로
+ * render pass는 이 객체가 들고 있는다. 부착물 형식만으로 정해지고 image view와 무관하므로
  * swapchain을 재생성해도 그대로 쓸 수 있다. 반면 framebuffer는 특정 view에 묶이는데
  * 그 view는 swapchain이 재생성할 때마다 파괴되므로 캐시하지 않고 pass마다 만든다.
  * 드라이버 호출 두 번은 측정된 병목이 아니다 (CODING_RULES.md §16).
@@ -123,6 +150,8 @@ public:
     void beginRenderPass(const rhi::RenderPassDesc& desc) override {
         NXT_ASSERT_MSG(desc.color.valid(), "유효하지 않은 color attachment로 render pass를 시작하려 했다.");
         NXT_ASSERT_MSG(desc.colorFormat != rhi::Format::Undefined, "color attachment의 형식이 정해지지 않았다.");
+        NXT_ASSERT_MSG(desc.depth.valid(), "유효하지 않은 depth attachment로 render pass를 시작하려 했다.");
+        NXT_ASSERT_MSG(desc.depthFormat != rhi::Format::Undefined, "depth attachment의 형식이 정해지지 않았다.");
         NXT_ASSERT_MSG((desc.extent.width > 0) && (desc.extent.height > 0), "render area의 크기가 0이다.");
         NXT_ASSERT_MSG(!passActive_, "이전 render pass를 끝내지 않고 다시 시작하려 했다.");
 
@@ -133,25 +162,33 @@ public:
         // 파괴하게 된다 (VUID-vkEndCommandBuffer-commandBuffer-00059).
         releaseFramebuffer();
 
-        // render pass는 형식에만 달려 있다. Phase 0은 형식이 하나라 한 번만 만든다.
-        if (!renderPass_ || (renderPassFormat_ != desc.colorFormat)) {
+        // render pass는 부착물 형식에만 달려 있다. 형식이 그대로면 pass마다 다시
+        // 만들지 않고 재사용한다.
+        if (!renderPass_ || (renderPassColorFormat_ != desc.colorFormat) ||
+            (renderPassDepthFormat_ != desc.depthFormat)) {
             releaseRenderPass();
-            renderPass_ = createColorRenderPass(device_.device(), desc.colorFormat);
-            renderPassFormat_ = desc.colorFormat;
+            renderPass_ = createRenderPass(device_.device(), desc.colorFormat, desc.depthFormat);
+            renderPassColorFormat_ = desc.colorFormat;
+            renderPassDepthFormat_ = desc.depthFormat;
         }
 
         const vk::ImageView color = toVkHandle<vk::ImageView>(desc.color);
-        framebuffer_ = createColorFramebuffer(device_.device(), renderPass_, color, desc.extent);
+        const vk::ImageView depth = toVkHandle<vk::ImageView>(desc.depth);
+        framebuffer_ = createFramebuffer(device_.device(), renderPass_, color, depth, desc.extent);
 
-        const vk::ClearValue clearValue = vk::ClearColorValue{desc.clearColor.red, desc.clearColor.green,
-                                                              desc.clearColor.blue, desc.clearColor.alpha};
+        // 첨부물 순서는 render pass와 같아야 한다. 0번이 색, 1번이 깊이다.
+        const std::array<vk::ClearValue, 2> clearValues{
+            vk::ClearColorValue{desc.clearColor.red, desc.clearColor.green, desc.clearColor.blue,
+                                desc.clearColor.alpha},
+            vk::ClearDepthStencilValue{desc.clearDepth, 0},
+        };
 
         vk::RenderPassBeginInfo beginInfo{};
         beginInfo.renderPass = renderPass_;
         beginInfo.framebuffer = framebuffer_;
         beginInfo.renderArea = vk::Rect2D{vk::Offset2D{0, 0}, vk::Extent2D{desc.extent.width, desc.extent.height}};
-        beginInfo.clearValueCount = 1;
-        beginInfo.pClearValues = &clearValue;
+        beginInfo.clearValueCount = static_cast<std::uint32_t>(clearValues.size());
+        beginInfo.pClearValues = clearValues.data();
 
         commandBuffer_.beginRenderPass(beginInfo, vk::SubpassContents::eInline);
         passActive_ = true;
@@ -168,6 +205,48 @@ public:
         passActive_ = false;
     }
 
+    void setPipeline(const rhi::GraphicsPipeline& pipeline) override {
+        NXT_ASSERT_MSG(passActive_, "render pass 밖에서 pipeline을 묶으려 했다.");
+        NXT_ASSERT_MSG(pipeline.valid(), "유효하지 않은 pipeline을 묶으려 했다.");
+
+        commandBuffer_.bindPipeline(vk::PipelineBindPoint::eGraphics, toVkHandle<vk::Pipeline>(pipeline));
+    }
+
+    void setViewport(const rhi::Extent2D& extent) override {
+        NXT_ASSERT_MSG(passActive_, "render pass 밖에서 viewport를 정하려 했다.");
+        NXT_ASSERT_MSG((extent.width > 0) && (extent.height > 0), "viewport의 크기가 0이다.");
+
+        // 깊이 범위는 [0, 1]이다. Vulkan의 clip 공간 z와 같다.
+        const vk::Viewport viewport{0.0f, 0.0f, static_cast<float>(extent.width), static_cast<float>(extent.height),
+                                    0.0f, 1.0f};
+        commandBuffer_.setViewport(0, viewport);
+    }
+
+    void setScissor(const rhi::Extent2D& extent) override {
+        NXT_ASSERT_MSG(passActive_, "render pass 밖에서 scissor를 정하려 했다.");
+        NXT_ASSERT_MSG((extent.width > 0) && (extent.height > 0), "scissor의 크기가 0이다.");
+
+        commandBuffer_.setScissor(0, vk::Rect2D{vk::Offset2D{0, 0}, vk::Extent2D{extent.width, extent.height}});
+    }
+
+    void setVertexBuffer(std::uint32_t binding, const rhi::Buffer& buffer) override {
+        NXT_ASSERT_MSG(passActive_, "render pass 밖에서 vertex buffer를 묶으려 했다.");
+        NXT_ASSERT_MSG(buffer.valid(), "유효하지 않은 vertex buffer를 묶으려 했다.");
+
+        // Phase 0은 버퍼 앞에서부터 그리므로 오프셋은 0이다.
+        const std::array<vk::Buffer, 1> buffers{toVkHandle<vk::Buffer>(buffer)};
+        const std::array<vk::DeviceSize, 1> offsets{0};
+        commandBuffer_.bindVertexBuffers(binding, buffers, offsets);
+    }
+
+    void draw(std::uint32_t vertexCount, std::uint32_t instanceCount, std::uint32_t firstVertex,
+              std::uint32_t firstInstance) override {
+        NXT_ASSERT_MSG(passActive_, "render pass 밖에서 draw를 기록하려 했다.");
+        NXT_ASSERT_MSG(vertexCount > 0, "정점 0개를 그리려 했다.");
+
+        commandBuffer_.draw(vertexCount, instanceCount, firstVertex, firstInstance);
+    }
+
 private:
     /// @brief framebuffer를 파괴한다. 다음 pass가 시작되거나 encoder가 사라질 때 부른다.
     void releaseFramebuffer() noexcept {
@@ -177,12 +256,13 @@ private:
         }
     }
 
-    /// @brief render pass를 파괴한다. 형식이 바뀌거나 encoder가 사라질 때 부른다.
+    /// @brief render pass를 파괴한다. 부착물 형식이 바뀌거나 encoder가 사라질 때 부른다.
     void releaseRenderPass() noexcept {
         if (renderPass_) {
             device_.device().destroyRenderPass(renderPass_);
             renderPass_ = vk::RenderPass{};
-            renderPassFormat_ = rhi::Format::Undefined;
+            renderPassColorFormat_ = rhi::Format::Undefined;
+            renderPassDepthFormat_ = rhi::Format::Undefined;
         }
     }
 
@@ -195,11 +275,14 @@ private:
     /// @brief beginRenderPass()가 만들고 다음 beginRenderPass()가 파괴하는 framebuffer.
     vk::Framebuffer framebuffer_{};
 
-    /// @brief 이 encoder가 쓰는 render pass. 형식이 정해진 뒤에만 유효하다.
+    /// @brief 이 encoder가 쓰는 render pass. 부착물 형식이 정해진 뒤에만 유효하다.
     vk::RenderPass renderPass_{};
 
-    /// @brief renderPass_를 만든 형식. 다르면 다시 만든다.
-    rhi::Format renderPassFormat_{rhi::Format::Undefined};
+    /// @brief renderPass_를 만든 색 부착물 형식. 다르면 다시 만든다.
+    rhi::Format renderPassColorFormat_{rhi::Format::Undefined};
+
+    /// @brief renderPass_를 만든 깊이 부착물 형식. 다르면 다시 만든다.
+    rhi::Format renderPassDepthFormat_{rhi::Format::Undefined};
 
     /// @brief beginRenderPass()와 endRenderPass()가 짝을 이루는지 확인한다.
     bool passActive_ = false;

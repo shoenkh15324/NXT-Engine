@@ -60,13 +60,35 @@ struct RasterizerState {
 };
 
 /**
+ * @brief 깊이 테스트와 깊이 쓰기를 어떻게 할지 정한다.
+ *
+ * 깊이 테스트가 켜져 있으면 새 조각의 깊이를 깊이 버퍼의 값과 compareOp로 비교하고,
+ * 통과한 조각만 색 부착물에 쓴다. writeEnabled가 켜져 있으면 통과한 조각의 깊이로
+ * 버퍼를 갱신한다.
+ *
+ * @note 기본값은 둘 다 꺼짐이다. 깊이 부착물이 있다는 사실만으로 테스트를 켜지
+ *       않는다 — 깊이 없이 그리는 패스도 같은 render pass를 쓸 수 있다.
+ */
+struct DepthState {
+    /// @brief 깊이 테스트를 할지 여부이다.
+    bool testEnabled = false;
+
+    /// @brief 통과한 조각의 깊이를 버퍼에 쓸지 여부이다.
+    bool writeEnabled = false;
+
+    /// @brief 깊이를 비교하는 방법이다. testEnabled가 false면 쓰이지 않는다.
+    CompareOp compareOp = CompareOp::Less;
+};
+
+/**
  * @brief graphics pipeline을 만드는 데 필요한 설정이다.
  *
  * Phase 0은 버텍스·프래그먼트 두 단계만 쓰고, descriptor set과 push constant가
  * 없으므로 pipeline layout은 비어 있다.
  *
- * @note 깊이 상태가 없다. B4에서 depth attachment와 함께 들어온다. 그때는 이
- *       기술자와 양쪽 render pass가 동시에 넓어진다 (phase0.md B4).
+ * 깊이 부착물은 항상 있다. Phase 0의 render pass가 색 부착물과 깊이 부착물을 함께
+ * 쓰기 때문이다 (phase0.md B4). 그래서 depthFormat을 비워 둘 수 없고, 깊이 테스트를
+ * 켤지는 DepthState가 정한다.
  */
 struct GraphicsPipelineDesc {
     /// @brief 버텍스 단계 셰이더이다. 유효해야 한다.
@@ -86,6 +108,12 @@ struct GraphicsPipelineDesc {
 
     /// @brief 색 부착물의 형식이다. Swapchain::format()과 같아야 한다.
     Format colorFormat = Format::Undefined;
+
+    /// @brief 깊이 부착물의 형식이다. RenderPassDesc::depthFormat과 같아야 한다.
+    Format depthFormat = Format::Undefined;
+
+    /// @brief 깊이 테스트와 깊이 쓰기 상태이다.
+    DepthState depth{};
 };
 
 /**

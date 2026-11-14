@@ -195,4 +195,33 @@ constexpr ImageUsage& operator|=(ImageUsage& lhs, ImageUsage rhs) noexcept {
     return lhs;
 }
 
+/**
+ * @brief 깊이 테스트가 새 조각의 깊이를 버퍼의 값과 비교하는 방법이다.
+ *
+ * VkCompareOp를 그대로 옮겼다. 깊이 테스트가 켜져 있으면 비교에 통과한 조각만
+ * 색 부착물에 쓰이고, 통과한 조각의 깊이는 DepthState::writeEnabled에 따라 버퍼를
+ * 갱신한다.
+ *
+ * NXT의 관례는 작은 z가 앞이다 — clip 공간에서 z가 작을수록 카메라에 가깝다.
+ * 그래서 기본값인 Less가 "앞에 있는 것이 이긴다"를 뜻한다.
+ */
+enum class CompareOp : std::uint8_t {
+    /// @brief 항상 실패한다. 테스트를 끄려면 이 값이 아니라 testEnabled를 끈다.
+    Never = 0,
+    /// @brief 새 깊이가 버퍼보다 작을 때 통과한다.
+    Less,
+    /// @brief 새 깊이가 버퍼와 같을 때 통과한다.
+    Equal,
+    /// @brief 새 깊이가 버퍼보다 작거나 같을 때 통과한다.
+    LessOrEqual,
+    /// @brief 새 깊이가 버퍼보다 클 때 통과한다.
+    Greater,
+    /// @brief 새 깊이가 버퍼와 다를 때 통과한다.
+    NotEqual,
+    /// @brief 새 깊이가 버퍼보다 크거나 같을 때 통과한다.
+    GreaterOrEqual,
+    /// @brief 항상 통과한다. 나중에 그린 것이 앞에 온다.
+    Always,
+};
+
 } // namespace nxt::graphics::rhi

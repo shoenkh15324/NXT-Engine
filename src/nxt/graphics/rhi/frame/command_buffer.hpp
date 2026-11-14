@@ -6,7 +6,9 @@
 #include <nxt/graphics/rhi/frame/fence.hpp>
 #include <nxt/graphics/rhi/frame/semaphore.hpp>
 #include <nxt/graphics/rhi/frame/swapchain.hpp>
+#include <nxt/graphics/rhi/resource/buffer.hpp>
 #include <nxt/graphics/rhi/resource/image.hpp>
+#include <nxt/graphics/rhi/resource/pipeline.hpp>
 
 namespace nxt::graphics::rhi {
 
@@ -58,9 +60,10 @@ struct ClearColor {
  * RHI는 이 기술자를 Vulkan으로 번역할 뿐 무엇을 그리는지 모른다 (rhi.md §10).
  * 그래서 그릴 대상과 크기, clear 색만 받는다.
  *
- * @note Phase 0은 단일 render pass이고 색 부착물 하나를 매 프레임 clear한다 —
- *       swapchain 이미지의 내용은 acquire할 때마다 보장되지 않기 때문이다
- *       (frame.md §4). 깊이 부착물은 B4에서 더한다.
+ * @note Phase 0의 render pass는 색 부착물과 깊이 부착물을 함께 쓴다. 둘 다 매
+ *       프레임 clear한다 — swapchain 이미지의 내용은 acquire할 때마다 보장되지
+ *       않고, 깊이 버퍼는 프레임마다 같은 값에서 시작해야 하기 때문이다
+ *       (frame.md §4).
  */
 struct RenderPassDesc {
     /// @brief 색 부착물로 쓸 대상이다. 보통 swapchain.imageView(imageIndex)다.
@@ -84,6 +87,20 @@ struct RenderPassDesc {
 
     /// @brief 색 부착물을 지울 때 채울 색.
     ClearColor clearColor{};
+
+    /**
+     * @brief 깊이 부착물로 쓸 대상이다.
+     *
+     * swapchain이 주지 않으므로 프레임 루프가 만든 깊이 이미지의 view를 넘긴다.
+     * 색 부착물과 크기가 같아야 한다.
+     */
+    ImageView depth;
+
+    /// @brief 깊이 부착물의 형식이다. 깊이 이미지를 만들 때 쓴 형식과 같아야 한다.
+    Format depthFormat = Format::Undefined;
+
+    /// @brief 깊이 부착물을 지울 때 채울 값이다. 1.0이 가장 먼 값이다.
+    float clearDepth = 1.0f;
 };
 
 /**
@@ -173,6 +190,58 @@ public:
 
     /// @brief render pass를 끝낸다. Phase 0에서 command buffer 하나에 pass가 하나다.
     virtual void endRenderPass() = 0;
+
+    /**
+     * @brief 이후 draw에 쓸 파이프라인을 묶는다.
+     *
+     * render pass가 시작된 뒤에만 부를 수 있다. 파이프라인은 그 render pass와
+     * 호환되어야 하며, 호환성은 구조로만 판정되므로 createGraphicsPipeline()이
+     * 만든 값을 그대로 넘기면 된다 (pipeline.hpp).
+     *
+     * @param[in] pipeline 묶을 파이프라인. 유효해야 한다.
+     */
+    virtual void setPipeline(const GraphicsPipeline& pipeline) = 0;
+
+    /**
+     * @brief viewport를 render area 전체로 정한다.
+     *
+     * viewport는 동적 상태다. 파이프라인에 크기를 박지 않았으므로 draw 전에 매번
+     * 넣어야 한다. 그 대신 창 크기가 바뀌어도 파이프라인을 다시 만들지 않아도 된다
+     * (frame.md §6).
+     *
+     * @param[in] extent render area의 크기. render pass의 extent와 같아야 한다.
+     */
+    virtual void setViewport(const Extent2D& extent) = 0;
+
+    /**
+     * @brief scissor 사각형을 render area 전체로 정한다.
+     *
+     * viewport와 같은 이유로 동적 상태다. scissor 밖의 조각은 버려진다.
+     *
+     * @param[in] extent render area의 크기. render pass의 extent와 같아야 한다.
+     */
+    virtual void setScissor(const Extent2D& extent) = 0;
+
+    /**
+     * @brief 정점 버퍼를 묶는다.
+     *
+     * @note 인덱스 버퍼는 아직 없다. Phase 0은 draw()로 정점만 그린다.
+     *
+     * @param[in] binding 정점 배치의 binding 번호. VertexLayout::binding과 같아야 한다.
+     * @param[in] buffer  묶을 버퍼. BufferUsage::Vertex로 만들어야 한다.
+     */
+    virtual void setVertexBuffer(std::uint32_t binding, const Buffer& buffer) = 0;
+
+    /**
+     * @brief 묶인 파이프라인과 정점 버퍼로 정점을 그린다.
+     *
+     * @param[in] vertexCount   그릴 정점 수.
+     * @param[in] instanceCount 인스턴스 수. Phase 0은 항상 1이다.
+     * @param[in] firstVertex   버퍼에서 첫 정점의 인덱스.
+     * @param[in] firstInstance 첫 인스턴스의 번호. Phase 0은 항상 0이다.
+     */
+    virtual void draw(std::uint32_t vertexCount, std::uint32_t instanceCount, std::uint32_t firstVertex,
+                      std::uint32_t firstInstance) = 0;
 
 protected:
     /**
