@@ -59,7 +59,7 @@ endif()
 # 아직 없는 파일은 적지 않는다. 없는 파일을 적으면 configure가 실패한다.
 #
 # 파일이 늘어나므로 backends/vulkan/과 같은 4분류로 나눈다.
-#   common/    어휘 — handle · enums
+#   common/    어휘 — handle · enums · types
 #   core/      프로그램 수명 — instance · device
 #   frame/     프레임 실행과 동기 — fence · semaphore (+ swapchain · command_buffer)
 #   resource/  GPU 리소스 — memory · image (+ buffer · shader · pipeline)
@@ -70,6 +70,7 @@ target_sources(nxt_graphics
         FILES
             rhi/rhi.hpp
             rhi/common/handle.hpp
+            rhi/common/types.hpp
             rhi/common/enums.hpp
             rhi/core/instance.hpp
             rhi/core/device.hpp

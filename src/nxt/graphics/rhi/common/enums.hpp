@@ -159,4 +159,40 @@ constexpr BufferUsage& operator|=(BufferUsage& lhs, BufferUsage rhs) noexcept {
     return lhs;
 }
 
+/**
+ * @brief 이미지를 어떤 용도로 쓸지 나타내는 비트 집합이다.
+ *
+ * VkImageUsageFlagBits를 옮긴 것이다. backend 구현부가 vk 플래그로 번역한다.
+ * 비트 위치는 BufferUsage와 같게 두었다 — 두 집합을 오갈 때 어느 비트가 전송인지
+ * 다시 세지 않아도 된다.
+ */
+enum class ImageUsage : std::uint32_t {
+    /// @brief 용도를 지정하지 않는다. 읽지도 쓰지도 않는다.
+    None = 0,
+    /// @brief 색 부착물로 쓴다.
+    ColorAttachment = 1u << 0,
+    /// @brief 깊이·스텐실 부착물로 쓴다.
+    DepthStencilAttachment = 1u << 1,
+    /// @brief 셰이더에서 텍스처로 읽는다.
+    Sampled = 1u << 2,
+    /// @brief 셰이더에서 저장 이미지로 읽고 쓴다.
+    Storage = 1u << 3,
+    /// @brief 다른 리소스로 복사하는 원본이다.
+    TransferSrc = 1u << 4,
+    /// @brief 다른 리소스로 복사되는 대상이다.
+    TransferDst = 1u << 5,
+};
+
+/// @brief 두 용도를 합친다.
+[[nodiscard]]
+constexpr ImageUsage operator|(ImageUsage lhs, ImageUsage rhs) noexcept {
+    return static_cast<ImageUsage>(static_cast<std::uint32_t>(lhs) | static_cast<std::uint32_t>(rhs));
+}
+
+/// @brief 기존 용도에 더한다.
+constexpr ImageUsage& operator|=(ImageUsage& lhs, ImageUsage rhs) noexcept {
+    lhs = lhs | rhs;
+    return lhs;
+}
+
 } // namespace nxt::graphics::rhi

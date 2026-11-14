@@ -257,4 +257,37 @@ inline vk::FrontFace toVulkan(rhi::FrontFace frontFace) noexcept {
     return vk::FrontFace::eCounterClockwise;
 }
 
+/**
+ * @brief rhi::ImageUsage 비트 집합을 vk::ImageUsageFlags로 옮긴다.
+ *
+ * BufferUsage와 같은 이유로 값이 아니라 의미로 매핑한다. 두 집합의 비트 위치는
+ * 같지만 vk 쪽 비트 위치는 다르다.
+ */
+[[nodiscard]]
+inline vk::ImageUsageFlags toVulkan(rhi::ImageUsage usage) noexcept {
+    const auto bits = static_cast<std::uint32_t>(usage);
+    vk::ImageUsageFlags flags;
+
+    if (bits & static_cast<std::uint32_t>(rhi::ImageUsage::ColorAttachment)) {
+        flags |= vk::ImageUsageFlagBits::eColorAttachment;
+    }
+    if (bits & static_cast<std::uint32_t>(rhi::ImageUsage::DepthStencilAttachment)) {
+        flags |= vk::ImageUsageFlagBits::eDepthStencilAttachment;
+    }
+    if (bits & static_cast<std::uint32_t>(rhi::ImageUsage::Sampled)) {
+        flags |= vk::ImageUsageFlagBits::eSampled;
+    }
+    if (bits & static_cast<std::uint32_t>(rhi::ImageUsage::Storage)) {
+        flags |= vk::ImageUsageFlagBits::eStorage;
+    }
+    if (bits & static_cast<std::uint32_t>(rhi::ImageUsage::TransferSrc)) {
+        flags |= vk::ImageUsageFlagBits::eTransferSrc;
+    }
+    if (bits & static_cast<std::uint32_t>(rhi::ImageUsage::TransferDst)) {
+        flags |= vk::ImageUsageFlagBits::eTransferDst;
+    }
+
+    return flags;
+}
+
 } // namespace nxt::graphics::vulkan
