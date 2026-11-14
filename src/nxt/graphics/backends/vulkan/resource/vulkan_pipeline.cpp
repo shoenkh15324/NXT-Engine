@@ -14,44 +14,61 @@ namespace nxt::graphics::vulkan {
 namespace {
 
 /**
- * @brief 파이프라인이 호환되어야 하는 색 render pass를 만든다.
+ * @brief 파이프라인이 호환되어야 하는 render pass를 만든다.
  *
  * 파이프라인은 만들 때 render pass가 필요하고, 그 render pass는 그릴 때 encoder가
  * 쓰는 것과 호환되어야 한다. 그래서 frame/vulkan_command_buffer.cpp의
- * createColorRenderPass()와 부착물·subpass 구성이 같아야 한다. B4에서 깊이 부착물을
- * 넣을 때 두 함수를 함께 고쳐야 한다 (phase0.md B4).
+ * createRenderPass()와 부착물·subpass 구성이 같아야 한다. 둘 중 하나만 고치면
+ * 그리기에서 pipeline incompatibility가 난다 (phase0.md B4).
  *
  * 이 render pass는 생성 호출이 끝나면 바로 파괴한다. 파이프라인은 render pass
  * 핸들을 보관하지 않고, 호환성은 구조로만 판정하기 때문이다.
  *
- * @param[in] device render pass를 만들 디바이스.
- * @param[in] format 색 부착물의 형식.
+ * @param[in] device      render pass를 만들 디바이스.
+ * @param[in] colorFormat 색 부착물의 형식.
+ * @param[in] depthFormat 깊이 부착물의 형식.
  * @return 만들어진 render pass.
  */
 [[nodiscard]]
-vk::RenderPass createCompatibleColorRenderPass(vk::Device device, rhi::Format format) {
-    vk::AttachmentDescription attachment{};
-    attachment.format = toVulkan(format);
-    attachment.samples = vk::SampleCountFlagBits::e1;
-    attachment.loadOp = vk::AttachmentLoadOp::eClear;
-    attachment.storeOp = vk::AttachmentStoreOp::eStore;
-    attachment.stencilLoadOp = vk::AttachmentLoadOp::eDontCare;
-    attachment.stencilStoreOp = vk::AttachmentStoreOp::eDontCare;
-    attachment.initialLayout = vk::ImageLayout::eUndefined;
-    attachment.finalLayout = vk::ImageLayout::ePresentSrcKHR;
+vk::RenderPass createCompatibleRenderPass(vk::Device device, rhi::Format colorFormat, rhi::Format depthFormat) {
+    std::array<vk::AttachmentDescription, 2> attachments{};
+
+    attachments[0].format = toVulkan(colorFormat);
+    attachments[0].samples = vk::SampleCountFlagBits::e1;
+    attachments[0].loadOp = vk::AttachmentLoadOp::eClear;
+    attachments[0].storeOp = vk::AttachmentStoreOp::eStore;
+    attachments[0].stencilLoadOp = vk::AttachmentLoadOp::eDontCare;
+    attachments[0].stencilStoreOp = vk::AttachmentStoreOp::eDontCare;
+    attachments[0].initialLayout = vk::ImageLayout::eUndefined;
+    attachments[0].finalLayout = vk::ImageLayout::ePresentSrcKHR;
+
+    attachments[1].format = toVulkan(depthFormat);
+    attachments[1].samples = vk::SampleCountFlagBits::e1;
+    attachments[1].loadOp = vk::AttachmentLoadOp::eClear;
+    // 깊이는 이 pass 안에서만 쓰인다. 다음 pass가 읽지 않으므로 남길 필요가 없다.
+    attachments[1].storeOp = vk::AttachmentStoreOp::eDontCare;
+    attachments[1].stencilLoadOp = vk::AttachmentLoadOp::eDontCare;
+    attachments[1].stencilStoreOp = vk::AttachmentStoreOp::eDontCare;
+    attachments[1].initialLayout = vk::ImageLayout::eUndefined;
+    attachments[1].finalLayout = vk::ImageLayout::eDepthStencilAttachmentOptimal;
 
     vk::AttachmentReference colorReference{};
     colorReference.attachment = 0;
     colorReference.layout = vk::ImageLayout::eColorAttachmentOptimal;
 
+    vk::AttachmentReference depthReference{};
+    depthReference.attachment = 1;
+    depthReference.layout = vk::ImageLayout::eDepthStencilAttachmentOptimal;
+
     vk::SubpassDescription subpass{};
     subpass.pipelineBindPoint = vk::PipelineBindPoint::eGraphics;
     subpass.colorAttachmentCount = 1;
     subpass.pColorAttachments = &colorReference;
+    subpass.pDepthStencilAttachment = &depthReference;
 
     vk::RenderPassCreateInfo createInfo{};
-    createInfo.attachmentCount = 1;
-    createInfo.pAttachments = &attachment;
+    createInfo.attachmentCount = static_cast<std::uint32_t>(attachments.size());
+    createInfo.pAttachments = attachments.data();
     createInfo.subpassCount = 1;
     createInfo.pSubpasses = &subpass;
 
@@ -96,6 +113,7 @@ struct PipelineStates {
     vk::PipelineViewportStateCreateInfo viewportState{};
     vk::PipelineRasterizationStateCreateInfo rasterization{};
     vk::PipelineMultisampleStateCreateInfo multisample{};
+    vk::PipelineDepthStencilStateCreateInfo depthStencil{};
     vk::PipelineColorBlendAttachmentState blendAttachment{};
     vk::PipelineColorBlendStateCreateInfo colorBlend{};
     std::array<vk::DynamicState, 2> dynamicStates{};
@@ -118,9 +136,9 @@ struct PipelineStates {
         info.pViewportState = &viewportState;
         info.pRasterizationState = &rasterization;
         info.pMultisampleState = &multisample;
-        // render pass에 깊이 부착물이 없으므로 null이어야 한다. B4에서 깊이를 넣으면
-        // 이 자리와 양쪽 render pass가 함께 바뀐다.
-        info.pDepthStencilState = nullptr;
+        // render pass에 깊이 부착물이 있으므로 이 상태가 반드시 있어야 한다
+        // (VUID-VkGraphicsPipelineCreateInfo-renderPass-06053).
+        info.pDepthStencilState = &depthStencil;
         info.pColorBlendState = &colorBlend;
         info.pDynamicState = &dynamicState;
         info.layout = layout;
@@ -220,6 +238,23 @@ void fillFixedStates(PipelineStates& states, const rhi::GraphicsPipelineDesc& de
 }
 
 /**
+ * @brief 깊이 테스트와 깊이 쓰기 상태를 채운다.
+ *
+ * stencil은 Phase 0에서 쓰지 않으므로 끈다. 깊이 비교 함수만 기술자에서 온다 —
+ * 깊이 형식이 D32SFloat이든 D24UnormS8Uint이든 비교 방식은 같다.
+ *
+ * @param[in,out] states 채울 상태.
+ * @param[in]     desc   깊이 상태를 읽을 기술자.
+ */
+void fillDepthState(PipelineStates& states, const rhi::GraphicsPipelineDesc& desc) {
+    states.depthStencil.depthTestEnable = desc.depth.testEnabled ? vk::True : vk::False;
+    states.depthStencil.depthWriteEnable = desc.depth.writeEnabled ? vk::True : vk::False;
+    states.depthStencil.depthCompareOp = toVulkan(desc.depth.compareOp);
+    states.depthStencil.depthBoundsTestEnable = vk::False;
+    states.depthStencil.stencilTestEnable = vk::False;
+}
+
+/**
  * @brief 파이프라인을 만들고 vk 핸들을 돌려준다.
  *
  * 호환용 render pass와 빈 layout은 생성 호출에서만 쓰이므로 여기서 만들고 바로
@@ -231,13 +266,14 @@ void fillFixedStates(PipelineStates& states, const rhi::GraphicsPipelineDesc& de
  */
 [[nodiscard]]
 vk::Pipeline createGraphicsPipelineHandle(vk::Device device, const rhi::GraphicsPipelineDesc& desc) {
-    const vk::RenderPass renderPass = createCompatibleColorRenderPass(device, desc.colorFormat);
+    const vk::RenderPass renderPass = createCompatibleRenderPass(device, desc.colorFormat, desc.depthFormat);
     const vk::PipelineLayout layout = createEmptyPipelineLayout(device);
 
     PipelineStates states;
     fillShaderStages(states, desc);
     fillVertexInput(states, desc.vertexLayout);
     fillFixedStates(states, desc);
+    fillDepthState(states, desc);
 
     const auto created = device.createGraphicsPipeline(nullptr, states.createInfo(layout, renderPass));
 
@@ -258,6 +294,7 @@ GraphicsPipeline createGraphicsPipeline(const Device& device, const GraphicsPipe
     NXT_ASSERT_MSG(desc.vertexShader.valid(), "유효하지 않은 vertex shader로 pipeline을 만들려 했다.");
     NXT_ASSERT_MSG(desc.fragmentShader.valid(), "유효하지 않은 fragment shader로 pipeline을 만들려 했다.");
     NXT_ASSERT_MSG(desc.colorFormat != Format::Undefined, "색 부착물의 형식이 정해지지 않았다.");
+    NXT_ASSERT_MSG(desc.depthFormat != Format::Undefined, "깊이 부착물의 형식이 정해지지 않았다.");
     NXT_ASSERT_MSG(desc.vertexLayout.stride > 0, "정점 stride가 0인 layout으로 pipeline을 만들 수 없다.");
     NXT_ASSERT_MSG(!desc.vertexLayout.attributes.empty(), "정점 속성이 하나도 없는 layout이다.");
 

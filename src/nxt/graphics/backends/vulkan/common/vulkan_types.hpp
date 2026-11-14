@@ -257,6 +257,32 @@ inline vk::FrontFace toVulkan(rhi::FrontFace frontFace) noexcept {
     return vk::FrontFace::eCounterClockwise;
 }
 
+/// @brief rhi::CompareOp을 대응하는 vk::CompareOp으로 옮긴다.
+[[nodiscard]]
+inline vk::CompareOp toVulkan(rhi::CompareOp op) noexcept {
+    switch (op) {
+        case rhi::CompareOp::Never:
+            return vk::CompareOp::eNever;
+        case rhi::CompareOp::Less:
+            return vk::CompareOp::eLess;
+        case rhi::CompareOp::Equal:
+            return vk::CompareOp::eEqual;
+        case rhi::CompareOp::LessOrEqual:
+            return vk::CompareOp::eLessOrEqual;
+        case rhi::CompareOp::Greater:
+            return vk::CompareOp::eGreater;
+        case rhi::CompareOp::NotEqual:
+            return vk::CompareOp::eNotEqual;
+        case rhi::CompareOp::GreaterOrEqual:
+            return vk::CompareOp::eGreaterOrEqual;
+        case rhi::CompareOp::Always:
+            return vk::CompareOp::eAlways;
+    }
+
+    NXT_ASSERT(false && "rhi::CompareOp 값이 매핑되지 않았다");
+    return vk::CompareOp::eLess;
+}
+
 /**
  * @brief rhi::ImageUsage 비트 집합을 vk::ImageUsageFlags로 옮긴다.
  *
