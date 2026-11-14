@@ -20,6 +20,7 @@ FrameLoop::FrameLoop(const rhi::Device& device, rhi::Swapchain& swapchain, Recor
       swapchain_(swapchain),
       record_{std::move(record)},
       deletion_{rhi::ResourceDeletion::create(device)} {
+    createDepthTarget();
     createFrames();
     NXT_LOG_INFO(Engine, FrameLoop, "frame loop created: lanes={}", imageCount_);
 }
@@ -33,6 +34,7 @@ FrameLoop::~FrameLoop() {
     device_.waitIdle();
     deletion_->flush();
     destroyFrames();
+    destroyDepthTarget();
 }
 
 FrameLoop::Status FrameLoop::frame() {
@@ -60,6 +62,8 @@ FrameLoop::Status FrameLoop::frame() {
     rhi::beginCommandBuffer(device_, commandBuffer);
     record_(*encoders_[frameIndex], FrameTarget{.color = swapchain_.imageView(imageIndex),
                                                 .colorFormat = swapchain_.format(),
+                                                .depth = depthView,
+                                                .depthFormat = kDepthFormat,
                                                 .extent = swapchain_.extent(),
                                                 .frameIndex = frameIndex});
     rhi::endCommandBuffer(device_, commandBuffer);
@@ -98,7 +102,12 @@ void FrameLoop::recreate() {
     // view를 참조하므로, view를 파괴하는 swapchain 재생성보다 앞서야 한다.
     destroyFrames();
 
+    // 깊이 이미지도 이전 크기에 묶여 있다. 새 extent로 다시 만들기 전에 버린다.
+    destroyDepthTarget();
+
     swapchain_.recreate();
+
+    createDepthTarget();
 
     // 이미지 개수가 같아도 다시 만든다. present가 실패하면 그 semaphore의 wait이
     // 수행되지 않아 신호된 채 남을 수 있고, 남은 신호를 물려받으면 다음 제출이
@@ -110,6 +119,37 @@ void FrameLoop::recreate() {
 
 rhi::ResourceDeletion& FrameLoop::deletion() noexcept {
     return *deletion_;
+}
+
+void FrameLoop::createDepthTarget() {
+    const rhi::Extent2D extent = swapchain_.extent();
+    NXT_ASSERT_MSG((extent.width > 0) && (extent.height > 0), "크기가 0인 깊이 이미지를 만들려 했다.");
+
+    depthImage_ = rhi::createImage(device_, rhi::ImageDesc{
+                                                .extent = extent,
+                                                .format = kDepthFormat,
+                                                .usage = rhi::ImageUsage::DepthStencilAttachment,
+                                            });
+
+    depthView = rhi::createImageView(device_, rhi::ImageViewDesc{
+                                                  .image = depthImage_.image,
+                                                  .format = kDepthFormat,
+                                              });
+
+    NXT_LOG_DEBUG(Engine, FrameLoop, "depth target created: {}x{}", extent.width, extent.height);
+}
+
+void FrameLoop::destroyDepthTarget() {
+    // view를 이미지보다 먼저 지운다 (image.hpp). framebuffer가 view를 참조하므로
+    // destroyFrames()가 먼저 불려야 한다.
+    if (depthView.valid()) {
+        rhi::destroyImageView(device_, depthView);
+        depthView = rhi::ImageView{};
+    }
+    if (depthImage_.image.valid()) {
+        rhi::destroyImage(device_, depthImage_);
+        depthImage_ = rhi::ImageAllocation{};
+    }
 }
 
 void FrameLoop::createFrames() {
