@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <memory>
 #include <nxt/graphics/rhi/common/enums.hpp>
+#include <nxt/graphics/rhi/common/types.hpp>
 #include <nxt/graphics/rhi/core/instance.hpp>
 #include <nxt/graphics/rhi/frame/semaphore.hpp>
 #include <nxt/graphics/rhi/resource/image.hpp>
@@ -11,15 +12,6 @@
 namespace nxt::graphics::rhi {
 
 class Device;
-
-/// @brief 렌더 타겟의 크기이다. 픽셀 단위이다.
-struct Extent2D {
-    /// @brief 가로 길이.
-    std::uint32_t width = 0;
-
-    /// @brief 세로 길이.
-    std::uint32_t height = 0;
-};
 
 /**
  * @brief Swapchain을 만드는 데 필요한 설정이다.
