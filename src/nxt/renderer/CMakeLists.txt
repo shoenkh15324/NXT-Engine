@@ -5,6 +5,7 @@
 
 add_library(nxt_renderer STATIC
     renderer.cpp
+    passes/triangle_pass.cpp
 )
 
 target_sources(nxt_renderer
@@ -15,6 +16,7 @@ target_sources(nxt_renderer
             renderer.hpp
             mesh/mesh.hpp
             world/world.hpp
+            passes/triangle_pass.hpp
 )
 
 target_include_directories(nxt_renderer PUBLIC "${PROJECT_SOURCE_DIR}/src")
