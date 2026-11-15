@@ -5,7 +5,6 @@ add_executable(sandbox main.cpp)
 target_link_libraries(sandbox PRIVATE
     nxt_core
     nxt_platform
-    nxt_graphics
     nxt_renderer
     nxt_engine
 )

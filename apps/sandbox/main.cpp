@@ -1,29 +1,19 @@
 #include <array>
-#include <chrono>
 #include <cstdint>
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
 #include <nxt/core/diagnostics/log.hpp>
-#include <nxt/core/time/timer.hpp>
-#include <nxt/engine/frame_loop.hpp>
-#include <nxt/graphics/rhi/rhi.hpp>
+#include <nxt/engine/engine.hpp>
 #include <nxt/platform/backends/windows/log_sink/win32_console_log_sink.hpp>
 #include <nxt/platform/backends/windows/log_sink/win32_file_log_sink.hpp>
-#include <nxt/platform/backends/windows/win32_window.hpp>
 #include <nxt/renderer/mesh/mesh.hpp>
-#include <nxt/renderer/passes/triangle_pass.hpp>
-#include <thread>
 #include <vector>
 
 namespace {
 
 namespace engine = ::nxt::engine;
 namespace renderer = ::nxt::renderer;
-namespace rhi = ::nxt::graphics::rhi;
-
-/// @brief 0-A에서 화면을 채우는 색이다.
-constexpr rhi::ClearColor kClearColor{0.10f, 0.20f, 0.30f, 1.0f};
 
 /**
  * @brief SPIR-V 파일을 32비트 워드 배열로 읽는다.
@@ -57,25 +47,6 @@ std::vector<std::uint32_t> loadSpirv(const std::filesystem::path& path) {
 
     NXT_LOG_INFO(Renderer, Passes, "shader loaded: {} ({} words)", path.filename().string(), words.size());
     return words;
-}
-
-/**
- * @brief 한 프레임을 기록한다. 0-B에서는 삼각형을 그린다.
- *
- * encoder만 받으므로 Device도 CommandBuffer도 만질 수 없다. 그래서 이 함수를
- * 프레임 루프에 넘겨도 "무엇을 그리는지"가 루프로 새지 않는다 (frame.md §3).
- *
- * @param[in]     pass    삼각형을 그리는 pass. 프레임 루프보다 오래 산다.
- * @param[in,out] encoder 기록 중인 command buffer의 창구.
- * @param[in]     target  부착물 · 크기 · clear 값.
- */
-void recordScene(const renderer::TrianglePass& pass, rhi::CommandEncoder& encoder, const engine::FrameTarget& target) {
-    pass.record(encoder, rhi::RenderPassDesc{.color = target.color,
-                                             .colorFormat = target.colorFormat,
-                                             .extent = target.extent,
-                                             .clearColor = kClearColor,
-                                             .depth = target.depth,
-                                             .depthFormat = target.depthFormat});
 }
 
 /**
@@ -137,29 +108,21 @@ int main() {
         return 1;
     }
 
-    nxt::platform::window::WindowDesc desc;
-    desc.title = "NXT Sandbox";
-    auto window = nxt::platform::window::createWindow(desc);
-    if (!window) {
+    // 창 · instance · device · swapchain · 렌더러 · 프레임 루프를 엔진이 조립하고
+    // 소유한다. 앱은 셰이더와 창 설정만 넘긴다. 셰이더 배열은 create()가 끝나면
+    // 버려도 된다 — 파이프라인을 만드는 동안만 읽는다.
+    auto engineInstance = engine::Engine::create(engine::EngineDesc{.appName = "NXT Sandbox",
+                                                                    .window = {.title = "NXT Sandbox"},
+                                                                    .vertexShader = vertexShader,
+                                                                    .fragmentShader = fragmentShader});
+    if (!engineInstance) {
         return 1;
     }
-
-    NXT_LOG_INFO(Platform, Window, "window ready : {}x{} \"{}\"", window->width(), window->height(), desc.title);
-
-    // GPU 스파인. 선언 순서가 소유 순서이고, 파괴는 그 역순으로 직접 부른다.
-    auto instance = rhi::Instance::create({.appName = "NXT Sandbox"});
-    const rhi::Surface surface = instance->createSurface(window->native());
-    auto device = instance->createDevice(rhi::DeviceDesc{.surface = surface});
-    auto swapchain = rhi::Swapchain::create(*device, rhi::SwapchainDesc{.surface = surface});
-
-    // 파이프라인이 색 형식과 깊이 형식을 알아야 하므로 swapchain 뒤에 만든다.
-    // 깊이 형식은 프레임 루프가 이미지를 만들 때 쓰는 값과 같아야 한다.
-    auto pass = std::make_unique<renderer::TrianglePass>(*device, swapchain->format(), engine::FrameLoop::kDepthFormat,
-                                                         vertexShader, fragmentShader);
 
     // 두 삼각형은 화면에서 완전히 겹친다. 가까운 쪽(z=0.25)을 먼저 그리고 먼 쪽
     // (z=0.75)을 나중에 그린다. 깊이 테스트가 꺼져 있으면 나중에 그린 초록색이
     // 덮어쓰고, 켜져 있으면 빨간색이 남는다 — B6의 깊이 검증이 이 순서에 달려 있다.
+    // 메시 개수를 바꾸면 그 개수만큼 그려지는지도 이 배열로 확인한다 (C2).
     const std::array<renderer::Mesh, 2> meshes{
         renderer::Mesh{.vertices = {{.position = {-0.5f, -0.5f, 0.25f}, .color = {0.90f, 0.25f, 0.20f}},
                                     {.position = {0.5f, -0.5f, 0.25f}, .color = {0.90f, 0.25f, 0.20f}},
@@ -168,60 +131,11 @@ int main() {
                                     {.position = {0.5f, -0.5f, 0.75f}, .color = {0.20f, 0.80f, 0.30f}},
                                     {.position = {0.0f, 0.6f, 0.75f}, .color = {0.20f, 0.80f, 0.30f}}}},
     };
-    pass->upload(meshes);
+    engineInstance->renderer().setMeshes(meshes);
 
-    // pass는 프레임 루프보다 오래 살아야 한다. 람다가 참조로 잡기 때문이다.
-    auto frameLoop = engine::FrameLoop::create(
-        *device, *swapchain, [&pass](rhi::CommandEncoder& encoder, const engine::FrameTarget& target) {
-            recordScene(*pass, encoder, target);
-        });
+    // 창이 닫힐 때까지 이벤트 · 프레임 · 리사이즈 · fps 로그를 엔진이 처리한다.
+    // 반환되면 엔진 소멸자가 GPU 사용이 끝난 순서대로 자원을 버린다.
+    engineInstance->run();
 
-    nxt::core::time::Timer fpsTimer;
-    std::uint32_t frames = 0;
-
-    while (window->isOpen()) {
-        window->pollEvents();
-        if (!window->isOpen()) {
-            break;
-        }
-
-        // 최소화. 그릴 영역이 없어 acquire가 계속 실패하므로 프레임을 부르지 않는다.
-        // pollEvents는 PeekMessage라 여기서 쉬지 않으면 CPU를 100% 쓴다.
-        if ((window->width() == 0) || (window->height() == 0)) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(16));
-            continue;
-        }
-
-        // 창 크기와 swapchain 크기가 다르면 낡은 것이다. fence 대기는 recreate가 한다.
-        const rhi::Extent2D extent = swapchain->extent();
-        if ((window->width() != extent.width) || (window->height() != extent.height)) {
-            frameLoop->recreate();
-        }
-
-        // acquire/present가 out-of-date를 돌려주는 경우. 루프는 스스로 고치지 않고
-        // 여기서 recreate를 부른다 (frame.md §6).
-        if (frameLoop->frame() == engine::FrameLoop::Status::OutOfDate) {
-            NXT_LOG_INFO(Engine, FrameLoop, "swapchain out of date: recreating");
-            frameLoop->recreate();
-        }
-
-        ++frames;
-        if (fpsTimer.elapsedMs() >= 1000) {
-            NXT_LOG_INFO(Engine, FrameLoop, "fps={}", frames);
-            frames = 0;
-            fpsTimer.reset();
-        }
-    }
-
-    // 소유 관계의 역순. frame loop가 레인 자원을, swapchain이 이미지와 view를
-    // 소유하고, surface는 instance가 파괴한다 (frame.md §9).
-    frameLoop.reset();
-    pass.reset();
-    swapchain.reset();
-    device.reset();
-    instance->destroySurface(surface);
-    instance.reset();
-
-    NXT_LOG_INFO(Platform, Window, "window closed");
     return 0;
 }
