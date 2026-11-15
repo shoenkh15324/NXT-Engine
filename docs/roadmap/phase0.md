@@ -850,10 +850,10 @@ depth는 어차피 Phase 3에 존재한다. 그때 넣으면 Phase 0의 렌더 �
 
 ## C1. 배선
 
-- [ ] `renderer/frame_context.{hpp,cpp}` — 매 프레임 임시 상태
-- [ ] `renderer/renderer.{hpp,cpp}`
-- [ ] `engine/engine.{hpp,cpp}` — 서브시스템 조립과 소유
-- [ ] `apps/sandbox/main.cpp` — 로깅 스모크 테스트를 삼각형 데모로 교체
+- [x] `renderer/frame_context.{hpp,cpp}` — 매 프레임 임시 상태
+- [x] `renderer/renderer.{hpp,cpp}`
+- [x] `engine/engine.{hpp,cpp}` — 서브시스템 조립과 소유
+- [x] `apps/sandbox/main.cpp` — 로깅 스모크 테스트를 삼각형 데모로 교체
 
 ## C2. 0-C 검증
 
