@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <memory>
 #include <nxt/graphics/rhi/common/enums.hpp>
 #include <nxt/graphics/rhi/common/handle.hpp>
@@ -9,6 +10,7 @@
 #include <nxt/graphics/rhi/resource/buffer.hpp>
 #include <nxt/graphics/rhi/resource/image.hpp>
 #include <nxt/graphics/rhi/resource/pipeline.hpp>
+#include <span>
 
 namespace nxt::graphics::rhi {
 
@@ -231,6 +233,21 @@ public:
      * @param[in] buffer  묶을 버퍼. BufferUsage::Vertex로 만들어야 한다.
      */
     virtual void setVertexBuffer(std::uint32_t binding, const Buffer& buffer) = 0;
+
+    /**
+     * @brief 묶인 파이프라인의 push constant를 갱신한다.
+     *
+     * draw 직전에 오브젝트별 변환·색을 넘기는 용도다. 값은 command buffer에
+     * 기록되므로 다음 draw 전에 다시 쓰지 않으면 이전 값이 유지된다.
+     *
+     * @param[in] stage  push constant를 읽는 셰이더 단계. 파이프라인 layout의
+     *                   범위에 포함된 단계여야 한다.
+     * @param[in] data   기록할 바이트 배열. 파이프라인 layout 범위 안에 들어가야 한다.
+     * @param[in] offset 범위 안에서의 시작 바이트 오프셋.
+     *
+     * @note setPipeline() 뒤에만 부를 수 있다.
+     */
+    virtual void pushConstants(ShaderStage stage, std::span<const std::byte> data, std::uint32_t offset = 0) = 0;
 
     /**
      * @brief 묶인 파이프라인과 정점 버퍼로 정점을 그린다.

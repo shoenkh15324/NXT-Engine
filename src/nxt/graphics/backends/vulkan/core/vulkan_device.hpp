@@ -1,8 +1,10 @@
 #pragma once
 
+#include <cstdint>
 #include <memory>
 #include <nxt/graphics/backends/vulkan/common/vulkan_types.hpp>
 #include <nxt/graphics/rhi/core/device.hpp>
+#include <unordered_map>
 
 namespace nxt::graphics::vulkan {
 
@@ -64,6 +66,38 @@ public:
         return commandPool_;
     }
 
+    /**
+     * @brief 파이프라인 layout을 등록한다.
+     *
+     * rhi::createGraphicsPipeline()이 파이프라인을 만든 직후에 부른다.
+     * push constant 명령은 layout이 필요한데 Vulkan API로는 파이프라인에서
+     * layout을 되찾을 수 없어 여기서 기억한다.
+     *
+     * @param[in] pipeline rhi 파이프라인 핸들의 값.
+     * @param[in] layout   그 파이프라인이 쓰는 layout.
+     */
+    void registerPipelineLayout(std::uint64_t pipeline, vk::PipelineLayout layout) const;
+
+    /**
+     * @brief 파이프라인에 묶인 layout을 반환한다.
+     *
+     * @param[in] pipeline rhi 파이프라인 핸들의 값.
+     * @return 등록된 layout. 없으면 빈 핸들이다.
+     */
+    [[nodiscard]]
+    vk::PipelineLayout pipelineLayout(std::uint64_t pipeline) const;
+
+    /**
+     * @brief layout을 목록에서 빼고 반환한다.
+     *
+     * 파이프라인을 파괴할 때 함께 호출한다. 등록되어 있지 않으면 빈 핸들이다.
+     *
+     * @param[in] pipeline rhi 파이프라인 핸들의 값.
+     * @return 빼낸 layout.
+     */
+    [[nodiscard]]
+    vk::PipelineLayout takePipelineLayout(std::uint64_t pipeline) const;
+
 private:
     VulkanDevice(vk::PhysicalDevice physicalDevice, vk::Device device, vk::CommandPool commandPool,
                  vk::Queue graphicsQueue, vk::Queue presentQueue) noexcept;
@@ -82,6 +116,14 @@ private:
 
     /// @brief 이 디바이스가 만든 커맨드 버퍼의 소유자이다. 디바이스보다 먼저 파괴한다.
     vk::CommandPool commandPool_{};
+
+    /**
+     * @brief 파이프라인별 pipeline layout이다.
+     *
+     * rhi factory가 const Device&를 받으므로 mutable로 둔다. 등록·조회·제거는
+     * 모두 백엔드 내부에서만 일어나고 한 스레드에서만 실행된다.
+     */
+    mutable std::unordered_map<std::uint64_t, vk::PipelineLayout> pipelineLayouts_;
 };
 
 /**

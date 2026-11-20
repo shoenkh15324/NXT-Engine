@@ -78,17 +78,28 @@ vk::RenderPass createCompatibleRenderPass(vk::Device device, rhi::Format colorFo
 }
 
 /**
- * @brief descriptor set도 push constant도 없는 빈 pipeline layout을 만든다.
+ * @brief push constant 범위를 가진 pipeline layout을 만든다.
  *
- * Phase 0의 셰이더는 균일 상수를 받지 않는다. 그래서 setLayoutCount와
- * pushConstantRangeCount가 0인 layout이면 충분하다.
+ * Phase 1은 오브젝트별 변환과 색을 push constant로 넘긴다. 범위의 size가 0이면
+ * Phase 0처럼 push constant가 없는 layout을 만든다.
  *
  * @param[in] device layout을 만들 디바이스.
- * @return 만들어진 layout.
+ * @param[in] range  push constant 범위. size가 0이면 쓰지 않는다.
+ * @return 만들어진 layout. 파이프라인을 파괴할 때 함께 파괴한다.
  */
 [[nodiscard]]
-vk::PipelineLayout createEmptyPipelineLayout(vk::Device device) {
+vk::PipelineLayout createPipelineLayout(vk::Device device, const rhi::PushConstantRange& range) {
     vk::PipelineLayoutCreateInfo createInfo{};
+
+    vk::PushConstantRange vkRange{};
+    if (range.size > 0) {
+        vkRange.stageFlags = toVulkan(range.stage);
+        vkRange.offset = range.offset;
+        vkRange.size = range.size;
+        createInfo.pushConstantRangeCount = 1;
+        createInfo.pPushConstantRanges = &vkRange;
+    }
+
     const auto created = device.createPipelineLayout(createInfo);
     VK_CHECK(created.result);
     return created.value;
@@ -255,19 +266,31 @@ void fillDepthState(PipelineStates& states, const rhi::GraphicsPipelineDesc& des
 }
 
 /**
+ * @brief 만든 파이프라인과 그 layout이다.
+ *
+ * layout은 push constant 명령에 필요하므로 파이프라인과 함께 돌려준다.
+ * 호출자가 파이프라인을 파괴할 때 layout도 함께 파괴해야 한다.
+ */
+struct CreatedGraphicsPipeline {
+    vk::Pipeline pipeline{};
+    vk::PipelineLayout layout{};
+};
+
+/**
  * @brief 파이프라인을 만들고 vk 핸들을 돌려준다.
  *
- * 호환용 render pass와 빈 layout은 생성 호출에서만 쓰이므로 여기서 만들고 바로
- * 파괴한다. 파이프라인은 두 핸들을 보관하지 않는다.
+ * 호환용 render pass는 생성 호출에서만 쓰이므로 여기서 만들고 바로 파괴한다.
+ * layout은 push constant 명령에 필요하므로 파이프라인과 함께 돌려준다.
+ * 파이프라인은 render pass 핸들을 보관하지 않는다.
  *
  * @param[in] device 파이프라인을 만들 디바이스.
  * @param[in] desc   파이프라인 설정.
- * @return 만들어진 파이프라인.
+ * @return 만들어진 파이프라인과 그 layout.
  */
 [[nodiscard]]
-vk::Pipeline createGraphicsPipelineHandle(vk::Device device, const rhi::GraphicsPipelineDesc& desc) {
+CreatedGraphicsPipeline createGraphicsPipelineHandle(vk::Device device, const rhi::GraphicsPipelineDesc& desc) {
     const vk::RenderPass renderPass = createCompatibleRenderPass(device, desc.colorFormat, desc.depthFormat);
-    const vk::PipelineLayout layout = createEmptyPipelineLayout(device);
+    const vk::PipelineLayout layout = createPipelineLayout(device, desc.pushConstants);
 
     PipelineStates states;
     fillShaderStages(states, desc);
@@ -277,11 +300,13 @@ vk::Pipeline createGraphicsPipelineHandle(vk::Device device, const rhi::Graphics
 
     const auto created = device.createGraphicsPipeline(nullptr, states.createInfo(layout, renderPass));
 
-    device.destroyPipelineLayout(layout);
+    if (created.result != vk::Result::eSuccess) {
+        device.destroyPipelineLayout(layout);
+    }
     device.destroyRenderPass(renderPass);
 
     VK_CHECK(created.result);
-    return created.value;
+    return CreatedGraphicsPipeline{.pipeline = created.value, .layout = layout};
 }
 
 } // namespace
@@ -299,9 +324,14 @@ GraphicsPipeline createGraphicsPipeline(const Device& device, const GraphicsPipe
     NXT_ASSERT_MSG(!desc.vertexLayout.attributes.empty(), "정점 속성이 하나도 없는 layout이다.");
 
     const vk::Device vkDevice = vulkan::toVulkanDevice(device).device();
-    const vk::Pipeline vkPipeline = vulkan::createGraphicsPipelineHandle(vkDevice, desc);
+    const auto created = vulkan::createGraphicsPipelineHandle(vkDevice, desc);
 
-    const GraphicsPipeline pipeline = vulkan::fromVkHandle<GraphicsPipelineTag>(vkPipeline);
+    const GraphicsPipeline pipeline = vulkan::fromVkHandle<GraphicsPipelineTag>(created.pipeline);
+
+    // Vulkan은 파이프라인에서 layout을 되찾는 API를 주지 않는다. push constant
+    // 명령에 필요하므로 디바이스가 파이프라인별로 기억한다.
+    vulkan::toVulkanDevice(device).registerPipelineLayout(pipeline.value(), created.layout);
+
     NXT_LOG_DEBUG(Graphics, Vulkan, "graphics pipeline created: pipeline={:#x}", pipeline.value());
     return pipeline;
 }
@@ -309,8 +339,15 @@ GraphicsPipeline createGraphicsPipeline(const Device& device, const GraphicsPipe
 void destroyGraphicsPipeline(const Device& device, const GraphicsPipeline& pipeline) {
     NXT_ASSERT_MSG(pipeline.valid(), "유효하지 않은 graphics pipeline을 해제하려 했다.");
 
+    const vulkan::VulkanDevice& vulkanDevice = vulkan::toVulkanDevice(device);
     const vk::Pipeline vkPipeline = vulkan::toVkHandle<vk::Pipeline>(pipeline);
-    vulkan::toVulkanDevice(device).device().destroyPipeline(vkPipeline);
+    const vk::PipelineLayout layout = vulkanDevice.takePipelineLayout(pipeline.value());
+
+    vulkanDevice.device().destroyPipeline(vkPipeline);
+    if (layout) {
+        vulkanDevice.device().destroyPipelineLayout(layout);
+    }
+
     NXT_LOG_DEBUG(Graphics, Vulkan, "graphics pipeline destroyed: pipeline={:#x}", pipeline.value());
 }
 

@@ -3,29 +3,54 @@
 #include <cstdint>
 #include <cstring>
 #include <nxt/core/diagnostics/log.hpp>
+#include <nxt/math/mat4.hpp>
 #include <nxt/renderer/passes/triangle_pass.hpp>
+#include <span>
 
 namespace nxt::renderer {
 
 namespace {
 
-/// @brief 정점 버퍼를 묶는 번호이다. Phase 0은 버퍼 하나만 쓴다.
+/// @brief 정점 버퍼를 묶는 번호이다. 지금은 버퍼 하나만 쓴다.
 constexpr std::uint32_t kVertexBinding = 0;
+
+/// @brief 단위 삼각형의 정점 수이다. draw마다 이 수만큼 그린다.
+constexpr std::uint32_t kUnitTriangleVertexCount = 3;
 
 /**
  * @brief MeshVertex를 셰이더의 location에 잇는 배치이다.
  *
- * triangle.vert가 location 0을 위치, 1을 색으로 받는다. offset은 Vec3 두 개가
- * 패딩 없이 이어지므로 MeshVertex 안에서의 실제 위치와 같다.
+ * triangle.vert는 이제 위치만 정점 입력으로 받는다. 색은 push constant로
+ * 넘어가므로 location 1은 쓰지 않는다. stride는 MeshVertex 크기 그대로다.
  */
-constexpr std::array<rhi::VertexAttribute, 2> kVertexAttributes{{
+constexpr std::array<rhi::VertexAttribute, 1> kVertexAttributes{{
     {.location = 0,
      .offset = static_cast<std::uint32_t>(offsetof(MeshVertex, position)),
      .format = rhi::Format::R32G32B32Sfloat},
-    {.location = 1,
-     .offset = static_cast<std::uint32_t>(offsetof(MeshVertex, color)),
-     .format = rhi::Format::R32G32B32Sfloat},
 }};
+
+/// @brief 모든 오브젝트가 공유하는 단위 삼각형 정점이다.
+constexpr std::array<MeshVertex, 3> kUnitTriangleVertices{{
+    {.position = {-0.5f, -0.5f, 0.0f}, .color = {1.0f, 1.0f, 1.0f}},
+    {.position = {0.5f, -0.5f, 0.0f}, .color = {1.0f, 1.0f, 1.0f}},
+    {.position = {0.0f, 0.5f, 0.0f}, .color = {1.0f, 1.0f, 1.0f}},
+}};
+
+/**
+ * @brief triangle.vert의 push constant 블록과 같은 배치이다.
+ *
+ * GLSL std430에서 mat4는 16바이트 정렬로 64바이트를 차지하고, vec4는 그 뒤
+ * 64바이트에 놓인다. C++ struct도 같은 순서와 크기여야 한다.
+ */
+struct TrianglePushConstants {
+    math::Mat4 transform;
+    float color[4];
+};
+
+static_assert(sizeof(math::Mat4) == 64, "Mat4는 64바이트여야 한다.");
+static_assert(sizeof(TrianglePushConstants) == 80, "push constant는 80바이트여야 한다.");
+
+constexpr std::uint32_t kPushConstantSize = static_cast<std::uint32_t>(sizeof(TrianglePushConstants));
 
 } // namespace
 
@@ -45,23 +70,25 @@ TrianglePass::TrianglePass(const rhi::Device& device, rhi::Format colorFormat, r
         .vertexShader = vertex,
         .fragmentShader = fragment,
         .vertexLayout = vertexLayout,
-        // Phase 0의 정점은 clip 공간의 2D 삼각형이라 앞뒤가 없다. 컬링을 켜면
-        // 정점을 감는 순서에 따라 통째로 사라지므로 끈다. 3D 메시가 들어오는
-        // Phase 2에서 감는 순서와 함께 다시 정한다.
+        // Phase 1 1-A1의 단위 삼각형은 clip 공간 2D라 앞뒤가 없다. 정점을 감는
+        // 순서에 따라 사라지지 않게 컬링을 끈다. 3D 메시가 들어오면 다시 정한다.
         .rasterizer = {.cullMode = rhi::CullMode::None, .frontFace = rhi::FrontFace::CounterClockwise},
         .colorFormat = colorFormat,
         .depthFormat = depthFormat,
         .depth = {.testEnabled = true, .writeEnabled = true, .compareOp = rhi::CompareOp::Less},
+        .pushConstants = {.stage = rhi::ShaderStage::Vertex, .offset = 0, .size = kPushConstantSize},
     };
 
     pipeline_ = rhi::createGraphicsPipeline(device_, desc);
 
-    // 파이프라인이 모듈을 다 읽었으므로 바로 해제한다. 셰이더 모듈은 GPU 실행 중에
-    // 참조되는 리소스가 아니다 (shader.hpp).
+    // 파이프라인이 모듈을 다 읽었으므로 바로 해제한다.
     rhi::destroyShader(device_, vertex);
     rhi::destroyShader(device_, fragment);
 
-    NXT_LOG_DEBUG(Renderer, Passes, "triangle pass created: pipeline={:#x}", pipeline_.value());
+    createUnitTriangle();
+
+    NXT_LOG_DEBUG(Renderer, Passes, "triangle pass created: pipeline={:#x}, pushConstants={}", pipeline_.value(),
+                  kPushConstantSize);
 }
 
 TrianglePass::~TrianglePass() {
@@ -75,57 +102,27 @@ TrianglePass::~TrianglePass() {
     }
 }
 
-void TrianglePass::upload(std::span<const Mesh> meshes) {
-    // 이전 업로드를 먼저 버린다. 매핑은 upload()가 끝날 때 이미 해제했으므로
-    // destroyBuffer()를 바로 부를 수 있다.
-    if (vertexBuffer_.buffer.valid()) {
-        rhi::destroyBuffer(device_, vertexBuffer_);
-        vertexBuffer_ = rhi::BufferAllocation{};
-    }
-    drawRanges_.clear();
+void TrianglePass::createUnitTriangle() {
+    constexpr std::uint64_t kByteSize = sizeof(kUnitTriangleVertices);
 
-    std::size_t vertexCount = 0;
-    for (const Mesh& mesh : meshes) {
-        vertexCount += mesh.vertices.size();
-    }
-    if (vertexCount == 0) {
-        return;
-    }
+    vertexBuffer_ = rhi::createBuffer(device_, rhi::BufferDesc{
+                                                   .size = kByteSize,
+                                                   .usage = rhi::BufferUsage::Vertex,
+                                               });
 
-    const std::size_t byteSize = vertexCount * sizeof(MeshVertex);
-    const rhi::BufferDesc desc{
-        .size = static_cast<std::uint64_t>(byteSize),
-        .usage = rhi::BufferUsage::Vertex,
-    };
-
-    vertexBuffer_ = rhi::createBuffer(device_, desc);
-
-    auto* destination = static_cast<MeshVertex*>(rhi::mapMemory(device_, vertexBuffer_.memory, 0, byteSize));
-
-    std::size_t firstVertex = 0;
-    for (const Mesh& mesh : meshes) {
-        if (mesh.vertices.empty()) {
-            continue;
-        }
-
-        std::memcpy(destination + firstVertex, mesh.vertices.data(), mesh.vertices.size() * sizeof(MeshVertex));
-        drawRanges_.push_back(DrawRange{
-            .firstVertex = static_cast<std::uint32_t>(firstVertex),
-            .vertexCount = static_cast<std::uint32_t>(mesh.vertices.size()),
-        });
-        firstVertex += mesh.vertices.size();
-    }
-
+    auto* destination = static_cast<MeshVertex*>(rhi::mapMemory(device_, vertexBuffer_.memory, 0, kByteSize));
+    std::memcpy(destination, kUnitTriangleVertices.data(), kByteSize);
     rhi::unmapMemory(device_, vertexBuffer_.memory);
 
-    NXT_LOG_DEBUG(Renderer, Passes, "triangle pass uploaded: meshes={}, vertices={}", meshes.size(), vertexCount);
+    NXT_LOG_DEBUG(Renderer, Passes, "unit triangle uploaded: vertices={}", kUnitTriangleVertexCount);
 }
 
-void TrianglePass::record(rhi::CommandEncoder& encoder, const rhi::RenderPassDesc& target) const {
+void TrianglePass::record(rhi::CommandEncoder& encoder, const rhi::RenderPassDesc& target,
+                          std::span<const WorldObject> objects) const {
     encoder.beginRenderPass(target);
 
     // 그릴 것이 없어도 pass는 열고 닫는다. clear는 매 프레임 필요하다.
-    if (!drawRanges_.empty()) {
+    if (!objects.empty()) {
         encoder.setPipeline(pipeline_);
 
         // viewport와 scissor는 동적 상태다. 파이프라인에 크기를 박지 않았으므로
@@ -135,8 +132,14 @@ void TrianglePass::record(rhi::CommandEncoder& encoder, const rhi::RenderPassDes
 
         encoder.setVertexBuffer(kVertexBinding, vertexBuffer_.buffer);
 
-        for (const DrawRange& range : drawRanges_) {
-            encoder.draw(range.vertexCount, 1, range.firstVertex, 0);
+        for (const WorldObject& object : objects) {
+            const TrianglePushConstants constants{
+                .transform = object.transform,
+                .color = {object.color.x, object.color.y, object.color.z, 1.0f},
+            };
+
+            encoder.pushConstants(rhi::ShaderStage::Vertex, std::as_bytes(std::span{&constants, 1}));
+            encoder.draw(kUnitTriangleVertexCount, 1, 0, 0);
         }
     }
 

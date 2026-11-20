@@ -151,6 +151,13 @@ VulkanDevice::VulkanDevice(vk::PhysicalDevice physicalDevice, vk::Device device,
       commandPool_{commandPool} {}
 
 VulkanDevice::~VulkanDevice() {
+    // 파이프라인이 정상적으로 파괴되면 목록은 비어 있다. 남아 있으면 여기서
+    // 정리해 디바이스보다 오래 사는 layout이 없게 한다.
+    for (const auto& entry : pipelineLayouts_) {
+        device_.destroyPipelineLayout(entry.second);
+    }
+    pipelineLayouts_.clear();
+
     // queue는 디바이스가 소유하므로 함께 사라진다. pool은 디바이스보다 먼저 파괴한다.
     device_.destroyCommandPool(commandPool_);
     device_.destroy();
@@ -169,6 +176,29 @@ void VulkanDevice::waitIdle() const {
     // VULKAN_HPP_NO_EXCEPTIONS에서는 vk::Device::waitIdle()이 Result를 그대로
     // 돌려주므로 VK_CHECK에 바로 넘길 수 있다.
     VK_CHECK(device_.waitIdle());
+}
+
+void VulkanDevice::registerPipelineLayout(std::uint64_t pipeline, vk::PipelineLayout layout) const {
+    const bool inserted = pipelineLayouts_.emplace(pipeline, layout).second;
+    NXT_ASSERT_MSG(inserted, "이미 layout이 등록된 pipeline이다.");
+    (void)inserted;
+}
+
+vk::PipelineLayout VulkanDevice::pipelineLayout(std::uint64_t pipeline) const {
+    const auto found = pipelineLayouts_.find(pipeline);
+    NXT_ASSERT_MSG(found != pipelineLayouts_.end(), "등록되지 않은 pipeline의 layout을 요청했다.");
+    return (found != pipelineLayouts_.end()) ? found->second : vk::PipelineLayout{};
+}
+
+vk::PipelineLayout VulkanDevice::takePipelineLayout(std::uint64_t pipeline) const {
+    const auto found = pipelineLayouts_.find(pipeline);
+    if (found == pipelineLayouts_.end()) {
+        return vk::PipelineLayout{};
+    }
+
+    const vk::PipelineLayout layout = found->second;
+    pipelineLayouts_.erase(found);
+    return layout;
 }
 
 const VulkanDevice& toVulkanDevice(const rhi::Device& device) noexcept {

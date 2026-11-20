@@ -7,6 +7,7 @@ add_library(nxt_renderer STATIC
     renderer.cpp
     passes/triangle_pass.cpp
     frame_context.cpp
+    world/world.cpp
 )
 
 target_sources(nxt_renderer

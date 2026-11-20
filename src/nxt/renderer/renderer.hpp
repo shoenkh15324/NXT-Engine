@@ -1,21 +1,13 @@
 #pragma once
 
-#include <cstdint>
+#include <cstddef>
 #include <nxt/graphics/rhi/rhi.hpp>
 #include <nxt/renderer/frame_context.hpp>
-#include <nxt/renderer/mesh/mesh.hpp>
 #include <nxt/renderer/passes/triangle_pass.hpp>
-#include <span>
-#include <vector>
+#include <nxt/renderer/world/world.hpp>
 
 namespace nxt::renderer {
 
-/**
- * @brief RHI 타입을 짧게 쓰기 위한 별칭이다.
- *
- * 헤더에서 using namespace를 전개하면 이 헤더를 include하는 모든 TU에 rhi의 이름이
- * 풀린다. 공개 계약인 헤더에서는 별칭 하나만 노출하고 타입은 rhi::로 한정한다.
- */
 namespace rhi = ::nxt::graphics::rhi;
 
 /**
@@ -25,9 +17,9 @@ namespace rhi = ::nxt::graphics::rhi;
  * acquire · submit · present · 동기화는 모른다 — 그 순서는 engine의 프레임 루프가
  * 정하고, renderer는 "무엇을"만 정한다.
  *
- * Phase 0은 패스가 하나뿐이라 목록도 그래프도 없다. 메시 N개를 삼각형 패스 하나로
- * 그린다. Renderer는 메시 목록과 패스의 호출 순서만 들고, 셰이더 · 파이프라인 ·
- * 정점 버퍼 같은 삼각형에 대한 지식은 TrianglePass가 소유한다.
+ * Phase 1 1-A1은 World의 오브젝트를 삼각형 패스 하나로 그린다. Renderer는 World를
+ * 소유하지 않고 매 프레임 참조로 받는다. 셰이더 · 파이프라인 · 정점 버퍼 같은
+ * 삼각형에 대한 지식은 TrianglePass가 소유한다.
  *
  * @note 수명을 가진 객체다. 디바이스보다 먼저 만들어지고 디바이스보다 먼저
  *       파괴되어야 한다.
@@ -64,36 +56,24 @@ public:
     Renderer& operator=(Renderer&&) = delete;
 
     /**
-     * @brief 그릴 메시 목록을 통째로 바꾼다.
+     * @brief World의 오브젝트를 이번 프레임에 기록한다.
      *
-     * 목록을 복사해 두었다가 정점 버퍼를 다시 만든다. 메시 개수를 바꾸면 다음
-     * 프레임부터 그 개수만큼 그린다.
-     *
-     * @note 정점 버퍼를 다시 만들므로 GPU가 아직 이전 버퍼를 읽고 있으면 안 된다.
-     *       첫 프레임 전이나 device.waitIdle() 뒤에만 부른다 (frame.md §9).
-     *
-     * @param[in] meshes 새로 그릴 메시들. 복사하므로 호출 뒤에 버려도 된다.
-     */
-    void setMeshes(std::span<const Mesh> meshes);
-
-    /**
-     * @brief 이번 프레임에 그릴 것을 encoder에 기록한다.
-     *
-     * 프레임 임시 상태에서 render pass 기술자를 만들고 삼각형 패스에 넘긴다.
-     * 메시가 없어도 clear는 한다 — swapchain 이미지의 내용은 acquire할 때마다
-     * 보장되지 않는다 (frame.md §4).
+     * 프레임 임시 상태에서 render pass 기술자를 만들고, World의 오브젝트 목록을
+     * 삼각형 패스에 넘긴다. 오브젝트가 없어도 clear는 한다 — swapchain 이미지의
+     * 내용은 acquire할 때마다 보장되지 않는다 (frame.md §4).
      *
      * @param[in,out] encoder 기록 중인 command buffer의 창구.
      * @param[in]     context 이번 프레임의 부착물 · 크기.
+     * @param[in]     world   이번 프레임에 그릴 오브젝트를 가진 렌더 월드.
      */
-    void record(rhi::CommandEncoder& encoder, const FrameContext& context) const;
+    void record(rhi::CommandEncoder& encoder, const FrameContext& context, const World& world) const;
 
 private:
     /// @brief 메시를 그리는 패스이다. 셰이더 · 파이프라인 · 정점 버퍼를 소유한다.
     TrianglePass pass_;
 
-    /// @brief 이번에 그릴 메시의 CPU 사본이다. setMeshes()가 통째로 바꾼다.
-    std::vector<Mesh> meshes_;
+    /// @brief 마지막으로 기록한 오브젝트 수이다. 같은 수를 매 프레임 로그하지 않으려고 둔다.
+    mutable std::size_t recordedObjectCount_ = 0;
 };
 
 } // namespace nxt::renderer

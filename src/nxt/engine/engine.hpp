@@ -6,17 +6,12 @@
 #include <nxt/graphics/rhi/rhi.hpp>
 #include <nxt/platform/window/window.hpp>
 #include <nxt/renderer/renderer.hpp>
+#include <nxt/renderer/world/world.hpp>
 #include <span>
 #include <string_view>
 
 namespace nxt::engine {
 
-/**
- * @brief RHI 타입을 짧게 쓰기 위한 별칭이다.
- *
- * 헤더에서 using namespace를 전개하면 이 헤더를 include하는 모든 TU에 rhi의 이름이
- * 풀린다. 공개 계약인 헤더에서는 별칭 하나만 노출하고 타입은 rhi::로 한정한다.
- */
 namespace rhi = ::nxt::graphics::rhi;
 
 /**
@@ -94,13 +89,13 @@ public:
     void run();
 
     /**
-     * @brief 씬을 채울 때 쓰는 렌더러를 반환한다.
+     * @brief 씬을 채울 때 쓰는 렌더 월드를 반환한다.
      *
-     * 앱은 이 객체로 메시를 올린다. Phase 2에서 World가 생기면 앱은 World만 만지고
-     * 이 접근자는 사라진다.
+     * 앱은 run() 전에 이 객체에 오브젝트를 더한다. World는 프레임을 넘어 사는
+     * 지속 상태이고, 프레임 임시 상태는 FrameContext가 든다 (scene_world.md §5).
      */
     [[nodiscard]]
-    renderer::Renderer& renderer() noexcept;
+    renderer::World& world() noexcept;
 
 private:
     /**
@@ -139,6 +134,9 @@ private:
 
     /// @brief 씬을 기록하는 렌더러를 소유한다.
     std::unique_ptr<renderer::Renderer> renderer_;
+
+    /// @brief 지속 상태인 렌더 월드이다. 앱이 run() 전에 채운다.
+    renderer::World world_;
 
     /// @brief 프레임 루프를 소유한다. 렌더러를 참조로 잡으므로 렌더러보다 먼저 파괴한다.
     std::unique_ptr<FrameLoop> frameLoop_;
