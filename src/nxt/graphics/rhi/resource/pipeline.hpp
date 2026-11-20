@@ -50,6 +50,26 @@ struct VertexLayout {
     std::span<const VertexAttribute> attributes;
 };
 
+/**
+ * @brief 파이프라인이 셰이더에 넘기는 push constant 범위이다.
+ *
+ * push constant는 draw마다 바뀌는 작은 상수를 command buffer에 직접 넣는 경로다.
+ * Phase 1은 오브젝트별 mat4 변환과 vec4 색을 이 경로로 넘긴다.
+ *
+ * @note size가 0이면 push constant를 쓰지 않는 파이프라인이다.
+ * @note offset과 size는 4의 배수여야 한다. Vulkan이 보장하는 최소 크기는 128바이트다.
+ */
+struct PushConstantRange {
+    /// @brief 이 범위를 읽는 셰이더 단계이다.
+    ShaderStage stage = ShaderStage::Vertex;
+
+    /// @brief 범위의 시작 바이트 오프셋이다.
+    std::uint32_t offset = 0;
+
+    /// @brief 범위의 바이트 크기이다. 0이면 쓰지 않는다.
+    std::uint32_t size = 0;
+};
+
 /// @brief 삼각형의 앞면을 어느 쪽으로 볼지 정한다.
 struct RasterizerState {
     /// @brief 버릴 면이다. 기본값은 뒷면을 버린다.
@@ -83,8 +103,9 @@ struct DepthState {
 /**
  * @brief graphics pipeline을 만드는 데 필요한 설정이다.
  *
- * Phase 0은 버텍스·프래그먼트 두 단계만 쓰고, descriptor set과 push constant가
- * 없으므로 pipeline layout은 비어 있다.
+ * Phase 0은 버텍스·프래그먼트 두 단계만 썼고 pipeline layout이 비어 있었다.
+ * Phase 1은 오브젝트별 변환·색을 push constant로 넘기므로 그 범위를 함께 받는다.
+ * descriptor set은 아직 없다.
  *
  * 깊이 부착물은 항상 있다. Phase 0의 render pass가 색 부착물과 깊이 부착물을 함께
  * 쓰기 때문이다 (phase0.md B4). 그래서 depthFormat을 비워 둘 수 없고, 깊이 테스트를
@@ -114,6 +135,9 @@ struct GraphicsPipelineDesc {
 
     /// @brief 깊이 테스트와 깊이 쓰기 상태이다.
     DepthState depth{};
+
+    /// @brief push constant 범위이다. size가 0이면 빈 layout을 만든다.
+    PushConstantRange pushConstants{};
 };
 
 /**

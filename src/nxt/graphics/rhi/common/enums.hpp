@@ -37,6 +37,20 @@ enum class Format : std::uint8_t {
 };
 
 /**
+ * @brief push constant를 읽는 셰이더 단계이다.
+ *
+ * Phase 1은 버텍스 단계에서 오브젝트 변환과 색을 읽는다. 프래그먼트 단계는
+ * 버텍스에서 넘긴 값을 보간해 쓰므로 push constant 범위에 넣지 않는다.
+ */
+enum class ShaderStage : std::uint8_t {
+    /// @brief 버텍스 셰이더 단계이다.
+    Vertex = 0,
+
+    /// @brief 프래그먼트 셰이더 단계이다.
+    Fragment,
+};
+
+/**
  * @brief 스왑체인 이미지를 화면에 제시하는 방식이다.
  *
  * 기본값은 Fifo다 (frame.md §5). 지연이 문제가 될 때만 Mailbox로 바꾼다.

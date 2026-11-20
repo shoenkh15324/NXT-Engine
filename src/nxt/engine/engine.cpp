@@ -32,16 +32,19 @@ Engine::Engine(const EngineDesc& desc, std::unique_ptr<platform::window::Window>
     renderer_ = std::make_unique<renderer::Renderer>(*device_, swapchain_->format(), FrameLoop::kDepthFormat,
                                                      desc.vertexShader, desc.fragmentShader);
 
-    // 프레임 루프는 렌더러를 참조로 잡는다. 렌더러보다 먼저 파괴되므로 포인터가
-    // 매달리지 않는다. 프레임 루프는 swapchain을 소유하지 않고 빌려 쓴다.
+    // 프레임 루프는 렌더러와 월드를 참조로 잡는다. 둘 다 프레임 루프보다 오래
+    // 살아야 하므로 멤버 선언 순서도 그에 맞춘다.
     renderer::Renderer* sceneRenderer = renderer_.get();
+    renderer::World* sceneWorld = &world_;
     frameLoop_ = FrameLoop::create(
-        *device_, *swapchain_, [sceneRenderer](rhi::CommandEncoder& encoder, const FrameTarget& target) {
-            sceneRenderer->record(encoder, renderer::FrameContext{.color = target.color,
-                                                                  .colorFormat = target.colorFormat,
-                                                                  .depth = target.depth,
-                                                                  .depthFormat = target.depthFormat,
-                                                                  .extent = target.extent});
+        *device_, *swapchain_, [sceneRenderer, sceneWorld](rhi::CommandEncoder& encoder, const FrameTarget& target) {
+            sceneRenderer->record(encoder,
+                                  renderer::FrameContext{.color = target.color,
+                                                         .colorFormat = target.colorFormat,
+                                                         .depth = target.depth,
+                                                         .depthFormat = target.depthFormat,
+                                                         .extent = target.extent},
+                                  *sceneWorld);
         });
 }
 
@@ -74,8 +77,8 @@ void Engine::run() {
     NXT_LOG_INFO(Platform, Window, "window closed");
 }
 
-renderer::Renderer& Engine::renderer() noexcept {
-    return *renderer_;
+renderer::World& Engine::world() noexcept {
+    return world_;
 }
 
 bool Engine::pumpFrame() {

@@ -1,19 +1,74 @@
-#include <array>
+#include <algorithm>
+#include <charconv>
+#include <cmath>
 #include <cstdint>
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
 #include <nxt/core/diagnostics/log.hpp>
 #include <nxt/engine/engine.hpp>
+#include <nxt/math/aabb.hpp>
+#include <nxt/math/mat4.hpp>
 #include <nxt/platform/backends/windows/log_sink/win32_console_log_sink.hpp>
 #include <nxt/platform/backends/windows/log_sink/win32_file_log_sink.hpp>
-#include <nxt/renderer/mesh/mesh.hpp>
+#include <nxt/renderer/world/world.hpp>
+#include <string_view>
+#include <system_error>
 #include <vector>
 
 namespace {
 
 namespace engine = ::nxt::engine;
+namespace math = ::nxt::math;
 namespace renderer = ::nxt::renderer;
+
+/// @brief --objects를 주지 않았을 때의 기본 오브젝트 수이다.
+constexpr std::uint32_t kDefaultObjectCount = 100'000;
+
+/**
+ * @brief 명령행에서 --objects N을 읽는다.
+ *
+ * N은 1 이상이어야 한다. 모르는 인자나 잘못된 숫자는 오류로 처리해, 벤치마크가
+ * 조용히 다른 설정으로 도는 일을 막는다.
+ *
+ * @param[in]  argc        인자 수.
+ * @param[in]  argv        인자 배열.
+ * @param[out] objectCount 읽은 값. 인자가 없으면 기본값이다.
+ * @return 파싱에 성공하면 true.
+ */
+bool parseObjectCount(int argc, char* argv[], std::uint32_t& objectCount) {
+    objectCount = kDefaultObjectCount;
+
+    for (int index = 1; index < argc; ++index) {
+        const std::string_view argument{argv[index]};
+        if (argument != "--objects") {
+            std::fprintf(stderr, "unknown argument: %.*s\n", static_cast<int>(argument.size()), argument.data());
+            return false;
+        }
+
+        if ((index + 1) >= argc) {
+            std::fprintf(stderr, "--objects requires a value\n");
+            return false;
+        }
+
+        const std::string_view text{argv[++index]};
+        std::uint32_t parsed = 0;
+        const auto [end, error] = std::from_chars(text.data(), text.data() + text.size(), parsed);
+
+        // from_chars는 부호를 받아들이므로 "-1"이 아주 큰 값으로 감싸인다. 빈 문자열과
+        // 함께 먼저 걸러 1 이상의 십진수만 통과시킨다.
+        const bool invalid = text.empty() || (text.front() == '-') || (error != std::errc{}) ||
+                             (end != text.data() + text.size()) || (parsed == 0);
+        if (invalid) {
+            std::fprintf(stderr, "invalid --objects: %.*s\n", static_cast<int>(text.size()), text.data());
+            return false;
+        }
+
+        objectCount = parsed;
+    }
+
+    return true;
+}
 
 /**
  * @brief SPIR-V 파일을 32비트 워드 배열로 읽는다.
@@ -72,9 +127,56 @@ void printBanner() {
     std::puts("============================================================");
 }
 
+/**
+ * @brief 고정된 그리드에 오브젝트 N개를 만든다.
+ *
+ * 각 오브젝트는 단위 삼각형 하나와 변환·색만 가진다. 그리드는 clip 공간의
+ * [-1.25, 1.25] 범위에 놓아 가장자리 오브젝트가 화면 밖으로 나가게 한다.
+ * 1-A3에서 프러스텀 컬링을 붙일 때 컬링 효과가 0이 되지 않게 하기 위해서다.
+ *
+ * @param[in,out] world       채울 월드.
+ * @param[in]     objectCount 만들 오브젝트 수. 1 이상이어야 한다.
+ *
+ * @note 같은 objectCount에서 항상 같은 순서와 같은 변환이 나온다. 벤치마크의
+ *       재현성은 이 고정 배치에 의존한다.
+ */
+void buildWorld(renderer::World& world, std::uint32_t objectCount) {
+    constexpr math::Aabb kUnitTriangleBounds{
+        .min = {-0.5f, -0.5f, 0.0f},
+        .max = {0.5f, 0.5f, 0.0f},
+    };
+
+    const auto columns = static_cast<std::uint32_t>(std::ceil(std::sqrt(static_cast<float>(objectCount))));
+    const float spacing = 2.5f / static_cast<float>(columns);
+    const float triangleScale = spacing * 0.9f;
+    const float colorDivisor = static_cast<float>(std::max(columns - 1u, 1u));
+
+    for (std::uint32_t index = 0; index < objectCount; ++index) {
+        const std::uint32_t column = index % columns;
+        const std::uint32_t row = index / columns;
+
+        const float x = -1.25f + ((static_cast<float>(column) + 0.5f) * spacing);
+        const float y = -1.25f + ((static_cast<float>(row) + 0.5f) * spacing);
+
+        const math::Mat4 transform = math::translation(math::Vec3{x, y, 0.5}) * math::scale(triangleScale);
+
+        world.add(renderer::WorldObject{
+            .transform = transform,
+            .bounds = math::transformed(kUnitTriangleBounds, transform),
+            .color = {0.25f + (0.75f * static_cast<float>(column) / colorDivisor),
+                      0.25f + (0.75f * static_cast<float>(row) / colorDivisor), 0.55f},
+        });
+    }
+}
+
 } // namespace
 
-int main() {
+int main(int argc, char* argv[]) {
+    std::uint32_t objectCount = 0;
+    if (!parseObjectCount(argc, argv, objectCount)) {
+        return 1;
+    }
+
     printBanner();
 
     // 터미널과 파일에 동시에 기록한다. 둘 다 같은 레코드를 받는다.
@@ -119,22 +221,12 @@ int main() {
         return 1;
     }
 
-    // 두 삼각형은 화면에서 완전히 겹친다. 가까운 쪽(z=0.25)을 먼저 그리고 먼 쪽
-    // (z=0.75)을 나중에 그린다. 깊이 테스트가 꺼져 있으면 나중에 그린 초록색이
-    // 덮어쓰고, 켜져 있으면 빨간색이 남는다 — B6의 깊이 검증이 이 순서에 달려 있다.
-    // 메시 개수를 바꾸면 그 개수만큼 그려지는지도 이 배열로 확인한다 (C2).
-    const std::array<renderer::Mesh, 2> meshes{
-        renderer::Mesh{.vertices = {{.position = {-0.5f, -0.5f, 0.25f}, .color = {0.90f, 0.25f, 0.20f}},
-                                    {.position = {0.5f, -0.5f, 0.25f}, .color = {0.90f, 0.25f, 0.20f}},
-                                    {.position = {0.0f, 0.6f, 0.25f}, .color = {0.90f, 0.25f, 0.20f}}}},
-        renderer::Mesh{.vertices = {{.position = {-0.5f, -0.5f, 0.75f}, .color = {0.20f, 0.80f, 0.30f}},
-                                    {.position = {0.5f, -0.5f, 0.75f}, .color = {0.20f, 0.80f, 0.30f}},
-                                    {.position = {0.0f, 0.6f, 0.75f}, .color = {0.20f, 0.80f, 0.30f}}}},
-    };
-    engineInstance->renderer().setMeshes(meshes);
+    // 앱은 지속 상태인 World만 채운다. GPU 버퍼·파이프라인·프레임 루프는 엔진이
+    // 소유하고, 렌더러는 매 프레임 World를 참조로 받는다.
+    buildWorld(engineInstance->world(), objectCount);
+    NXT_LOG_INFO(Renderer, World, "world built: objects={}", engineInstance->world().objectCount());
 
     // 창이 닫힐 때까지 이벤트 · 프레임 · 리사이즈 · fps 로그를 엔진이 처리한다.
-    // 반환되면 엔진 소멸자가 GPU 사용이 끝난 순서대로 자원을 버린다.
     engineInstance->run();
 
     return 0;

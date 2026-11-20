@@ -154,6 +154,7 @@ public:
         NXT_ASSERT_MSG(desc.depthFormat != rhi::Format::Undefined, "depth attachment의 형식이 정해지지 않았다.");
         NXT_ASSERT_MSG((desc.extent.width > 0) && (desc.extent.height > 0), "render area의 크기가 0이다.");
         NXT_ASSERT_MSG(!passActive_, "이전 render pass를 끝내지 않고 다시 시작하려 했다.");
+        boundPipeline_ = rhi::GraphicsPipeline{};
 
         // 지난번 이 레인이 쓴 framebuffer를 여기서 버린다. 프레임 루프가 이 레인의
         // fence를 기다린 뒤 beginCommandBuffer()를 불렀으므로 그 framebuffer를 쓴
@@ -210,6 +211,7 @@ public:
         NXT_ASSERT_MSG(pipeline.valid(), "유효하지 않은 pipeline을 묶으려 했다.");
 
         commandBuffer_.bindPipeline(vk::PipelineBindPoint::eGraphics, toVkHandle<vk::Pipeline>(pipeline));
+        boundPipeline_ = pipeline;
     }
 
     void setViewport(const rhi::Extent2D& extent) override {
@@ -237,6 +239,18 @@ public:
         const std::array<vk::Buffer, 1> buffers{toVkHandle<vk::Buffer>(buffer)};
         const std::array<vk::DeviceSize, 1> offsets{0};
         commandBuffer_.bindVertexBuffers(binding, buffers, offsets);
+    }
+
+    void pushConstants(rhi::ShaderStage stage, std::span<const std::byte> data, std::uint32_t offset) override {
+        NXT_ASSERT_MSG(passActive_, "render pass 밖에서 push constant를 쓰려 했다.");
+        NXT_ASSERT_MSG(boundPipeline_.valid(), "pipeline을 묶기 전에 push constant를 쓰려 했다.");
+        NXT_ASSERT_MSG(!data.empty(), "빈 push constant를 쓰려 했다.");
+
+        const vk::PipelineLayout layout = device_.pipelineLayout(boundPipeline_.value());
+        NXT_ASSERT_MSG(static_cast<bool>(layout), "pipeline layout을 찾지 못했다.");
+
+        commandBuffer_.pushConstants(layout, toVulkan(stage), offset, static_cast<std::uint32_t>(data.size()),
+                                     data.data());
     }
 
     void draw(std::uint32_t vertexCount, std::uint32_t instanceCount, std::uint32_t firstVertex,
@@ -286,6 +300,9 @@ private:
 
     /// @brief beginRenderPass()와 endRenderPass()가 짝을 이루는지 확인한다.
     bool passActive_ = false;
+
+    /// @brief 마지막으로 묶은 pipeline이다. push constant의 layout을 찾는 데 쓴다.
+    rhi::GraphicsPipeline boundPipeline_{};
 };
 
 } // namespace

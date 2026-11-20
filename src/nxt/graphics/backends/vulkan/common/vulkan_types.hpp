@@ -48,6 +48,20 @@ inline vk::Format toVulkan(rhi::Format format) noexcept {
     return vk::Format::eUndefined;
 }
 
+/// @brief rhi::ShaderStage을 대응하는 vk::ShaderStageFlags로 옮긴다.
+[[nodiscard]]
+inline vk::ShaderStageFlags toVulkan(rhi::ShaderStage stage) noexcept {
+    switch (stage) {
+        case rhi::ShaderStage::Vertex:
+            return vk::ShaderStageFlagBits::eVertex;
+        case rhi::ShaderStage::Fragment:
+            return vk::ShaderStageFlagBits::eFragment;
+    }
+
+    NXT_ASSERT(false && "rhi::ShaderStage 값이 매핑되지 않았다.");
+    return vk::ShaderStageFlagBits::eVertex;
+}
+
 /// @brief rhi::PresentMode을 대응하는 vk::PresentModeKHR로 옮긴다.
 [[nodiscard]]
 inline vk::PresentModeKHR toVulkan(rhi::PresentMode mode) noexcept {

@@ -1,3 +1,4 @@
+#include <nxt/core/diagnostics/log.hpp>
 #include <nxt/renderer/renderer.hpp>
 
 namespace nxt::renderer {
@@ -7,8 +8,7 @@ namespace {
 /**
  * @brief 화면을 지우는 색이다.
  *
- * 0-A에서 쓰던 값 그대로다. 배경색은 렌더러의 정책이므로 FrameContext가 아니라
- * 여기서 정한다.
+ * 배경색은 렌더러의 정책이므로 FrameContext가 아니라 여기서 정한다.
  */
 constexpr rhi::ClearColor kClearColor{0.10f, 0.20f, 0.30f, 1.0f};
 
@@ -20,13 +20,15 @@ Renderer::Renderer(const rhi::Device& device, rhi::Format colorFormat, rhi::Form
 
 Renderer::~Renderer() = default;
 
-void Renderer::setMeshes(std::span<const Mesh> meshes) {
-    meshes_.assign(meshes.begin(), meshes.end());
-    pass_.upload(meshes_);
-}
+void Renderer::record(rhi::CommandEncoder& encoder, const FrameContext& context, const World& world) const {
+    // 오브젝트 수가 바뀔 때만 남긴다. 매 프레임 로그를 찍으면 측정을 방해한다.
+    const std::size_t objectCount = world.objectCount();
+    if (objectCount != recordedObjectCount_) {
+        NXT_LOG_INFO(Renderer, Passes, "record: objects={} draws={}", objectCount, objectCount);
+        recordedObjectCount_ = objectCount;
+    }
 
-void Renderer::record(rhi::CommandEncoder& encoder, const FrameContext& context) const {
-    pass_.record(encoder, makeRenderPassDesc(context, kClearColor));
+    pass_.record(encoder, makeRenderPassDesc(context, kClearColor), world.objects());
 }
 
 } // namespace nxt::renderer
