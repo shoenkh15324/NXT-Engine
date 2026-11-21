@@ -20,7 +20,7 @@ Renderer::Renderer(const rhi::Device& device, rhi::Format colorFormat, rhi::Form
 
 Renderer::~Renderer() = default;
 
-void Renderer::record(rhi::CommandEncoder& encoder, const FrameContext& context, const World& world) const {
+std::uint32_t Renderer::record(rhi::CommandEncoder& encoder, const FrameContext& context, const World& world) const {
     // 오브젝트 수가 바뀔 때만 남긴다. 매 프레임 로그를 찍으면 측정을 방해한다.
     const std::size_t objectCount = world.objectCount();
     if (objectCount != recordedObjectCount_) {
@@ -29,6 +29,10 @@ void Renderer::record(rhi::CommandEncoder& encoder, const FrameContext& context,
     }
 
     pass_.record(encoder, makeRenderPassDesc(context, kClearColor), world.objects());
+
+    // 1-A2는 오브젝트당 draw 하나이므로 draw 수가 곧 오브젝트 수다. 1-A3의 DrawList가
+    // 들어오면 그 목록의 크기를 돌려주게 된다.
+    return static_cast<std::uint32_t>(objectCount);
 }
 
 } // namespace nxt::renderer

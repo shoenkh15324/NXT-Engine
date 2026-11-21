@@ -5,6 +5,7 @@
 #include <nxt/graphics/rhi/common/enums.hpp>
 #include <nxt/graphics/rhi/common/handle.hpp>
 #include <nxt/graphics/rhi/frame/fence.hpp>
+#include <nxt/graphics/rhi/frame/query.hpp>
 #include <nxt/graphics/rhi/frame/semaphore.hpp>
 #include <nxt/graphics/rhi/frame/swapchain.hpp>
 #include <nxt/graphics/rhi/resource/buffer.hpp>
@@ -248,6 +249,30 @@ public:
      * @note setPipeline() 뒤에만 부를 수 있다.
      */
     virtual void pushConstants(ShaderStage stage, std::span<const std::byte> data, std::uint32_t offset = 0) = 0;
+
+    /**
+     * @brief query pool의 query들을 되돌린다.
+     *
+     * 같은 pool에 timestamp를 다시 찍으려면 먼저 되돌려야 한다. render pass 밖에서
+     * 부른다 — 이 프레임의 그리기 명령보다 앞선다.
+     *
+     * @param[in] pool       되돌릴 pool.
+     * @param[in] firstQuery 첫 query 인덱스.
+     * @param[in] queryCount 되돌릴 query 수. 0이면 안 된다.
+     */
+    virtual void resetQueryPool(const QueryPool& pool, std::uint32_t firstQuery, std::uint32_t queryCount) = 0;
+
+    /**
+     * @brief 이 시점의 GPU timestamp를 기록한다.
+     *
+     * 기록만 하고 값은 꺼내지 않는다. 값은 그 command buffer의 fence가 신호된 뒤에
+     * readElapsedNs()로 읽는다 (phase1.md §5.1). draw마다 부르지 않는다 — 프레임
+     * 경계에만 찍는다.
+     *
+     * @param[in] pool  timestamp를 받을 pool.
+     * @param[in] query pool 안의 query 인덱스.
+     */
+    virtual void writeTimestamp(const QueryPool& pool, std::uint32_t query) = 0;
 
     /**
      * @brief 묶인 파이프라인과 정점 버퍼로 정점을 그린다.

@@ -1,11 +1,33 @@
 #include <chrono>
+#include <cstddef>
+#include <cstdint>
+#include <format>
 #include <nxt/core/diagnostics/log.hpp>
+#include <nxt/core/time/time.hpp>
 #include <nxt/core/time/timer.hpp>
 #include <nxt/engine/engine.hpp>
+#include <string>
 #include <thread>
 #include <utility>
 
 namespace nxt::engine {
+
+namespace {
+
+/// @brief 프레임 요약을 로그로 남기는 주기(밀리초)이다.
+constexpr std::uint64_t kReportIntervalMs = 1000;
+
+/**
+ * @brief 나노초를 밀리초로 바꾼다.
+ * @param[in] ns 바꿀 나노초.
+ * @return 밀리초 값.
+ */
+[[nodiscard]]
+double toMs(std::uint64_t ns) noexcept {
+    return static_cast<double>(ns) / static_cast<double>(core::time::kNsPerMs);
+}
+
+} // namespace
 
 std::unique_ptr<Engine> Engine::create(const EngineDesc& desc) {
     auto window = platform::window::createWindow(desc.window);
@@ -38,13 +60,13 @@ Engine::Engine(const EngineDesc& desc, std::unique_ptr<platform::window::Window>
     renderer::World* sceneWorld = &world_;
     frameLoop_ = FrameLoop::create(
         *device_, *swapchain_, [sceneRenderer, sceneWorld](rhi::CommandEncoder& encoder, const FrameTarget& target) {
-            sceneRenderer->record(encoder,
-                                  renderer::FrameContext{.color = target.color,
-                                                         .colorFormat = target.colorFormat,
-                                                         .depth = target.depth,
-                                                         .depthFormat = target.depthFormat,
-                                                         .extent = target.extent},
-                                  *sceneWorld);
+            return sceneRenderer->record(encoder,
+                                         renderer::FrameContext{.color = target.color,
+                                                                .colorFormat = target.colorFormat,
+                                                                .depth = target.depth,
+                                                                .depthFormat = target.depthFormat,
+                                                                .extent = target.extent},
+                                         *sceneWorld);
         });
 }
 
@@ -62,19 +84,45 @@ Engine::~Engine() {
 }
 
 void Engine::run() {
-    core::time::Timer fpsTimer;
-    std::uint32_t frames = 0;
+    core::time::Timer reportTimer;
 
     while (pumpFrame()) {
-        ++frames;
-        if (fpsTimer.elapsedMs() >= 1000) {
-            NXT_LOG_INFO(Engine, FrameLoop, "fps={}", frames);
-            frames = 0;
-            fpsTimer.reset();
+        if (reportTimer.elapsedMs() < kReportIntervalMs) {
+            continue;
         }
+        logFrameSummary();
+        reportTimer.reset();
+    }
+    // 1초보다 짧게 끝나도 숫자를 남긴다. 닫자마다 결과를 볼 수 있어야 한다.
+    logFrameSummary();
+    NXT_LOG_INFO(Platform, Window, "window closed");
+}
+
+void Engine::logFrameSummary() {
+    const FrameSummary summary = frameLoop_->stats().summary();
+    frameLoop_->stats().clear();
+
+    if (summary.frames == 0) {
+        return;
     }
 
-    NXT_LOG_INFO(Platform, Window, "window closed");
+    // timestamp를 못 쓰면 fence wait가 GPU 시간의 근사치이고, 로그는 "~"로 표시한다.
+    NXT_LOG_INFO(Engine, FrameLoop, "frame: n={} cpu={:.2f}ms gpu={}{:.2f}ms fence={:.2f}ms draws={}", summary.frames,
+                 summary.cpuFrameMs, summary.gpuApproximate ? "~" : "", summary.gpuFrameMs, summary.fenceWaitMs,
+                 summary.drawCalls);
+
+    if (summary.segmentCount == 0) {
+        return;
+    }
+
+    std::string segments;
+    for (std::size_t index = 0; index < summary.segmentCount; ++index) {
+        if (index != 0) {
+            segments += ' ';
+        }
+        segments += std::format("{}={:.2f}ms", summary.segments[index].name, toMs(summary.segments[index].ns));
+    }
+    NXT_LOG_INFO(Engine, FrameLoop, "cpu : {}", segments);
 }
 
 renderer::World& Engine::world() noexcept {

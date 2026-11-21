@@ -138,17 +138,18 @@ std::unique_ptr<VulkanDevice> VulkanDevice::create(vk::Instance instance, vk::Su
     VK_CHECK(pool.result);
 
     // make_unique는 private 생성자를 못 부른다. 여기서만 new를 쓴다.
-    return std::unique_ptr<VulkanDevice>(
-        new VulkanDevice(selection.physicalDevice, device, pool.value, graphicsQueue, presentQueue));
+    return std::unique_ptr<VulkanDevice>(new VulkanDevice(selection.physicalDevice, device, pool.value, graphicsQueue,
+                                                          presentQueue, selection.queueFamily));
 }
 
 VulkanDevice::VulkanDevice(vk::PhysicalDevice physicalDevice, vk::Device device, vk::CommandPool commandPool,
-                           vk::Queue graphicsQueue, vk::Queue presentQueue) noexcept
+                           vk::Queue graphicsQueue, vk::Queue presentQueue, std::uint32_t queueFamilyIndex) noexcept
     : physicalDevice_{physicalDevice},
       device_{device},
       graphicsQueue_{graphicsQueue},
       presentQueue_{presentQueue},
-      commandPool_{commandPool} {}
+      commandPool_{commandPool},
+      queueFamilyIndex_{queueFamilyIndex} {}
 
 VulkanDevice::~VulkanDevice() {
     // 파이프라인이 정상적으로 파괴되면 목록은 비어 있다. 남아 있으면 여기서

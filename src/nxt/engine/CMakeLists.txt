@@ -7,6 +7,7 @@
 add_library(nxt_engine STATIC
     engine.cpp
     frame_loop.cpp
+    frame_stats.cpp
 )
 
 target_sources(nxt_engine
@@ -16,6 +17,7 @@ target_sources(nxt_engine
         FILES
             engine.hpp
             frame_loop.hpp
+            frame_stats.hpp
 )
 
 target_include_directories(nxt_engine PUBLIC "${PROJECT_SOURCE_DIR}/src")
