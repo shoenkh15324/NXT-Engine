@@ -117,6 +117,14 @@ private:
     [[nodiscard]]
     bool pumpFrame();
 
+    /**
+     * @brief 지금까지 모인 프레임 지표를 한 줄로 남기고 비운다.
+     *
+     * 1초마다 부르고, 종료 직전에도 한 번 부른다. 매 프레임 로그를 찍지 않는 이유는
+     * 로그 I/O가 측정 대상에 섞이기 때문이다 (phase1.md §5.6).
+     */
+    void logFrameSummary();
+
     /// @brief 창을 소유한다. surface가 이 창의 핸들을 참조하므로 가장 나중에 파괴한다.
     std::unique_ptr<platform::window::Window> window_;
 

@@ -253,6 +253,22 @@ public:
                                      data.data());
     }
 
+    void resetQueryPool(const rhi::QueryPool& pool, std::uint32_t firstQuery, std::uint32_t queryCount) override {
+        NXT_ASSERT_MSG(pool.valid(), "유효하지 않은 query pool을 되돌리려 했다.");
+        NXT_ASSERT_MSG(queryCount > 0, "query를 0개 되돌리려 했다.");
+
+        commandBuffer_.resetQueryPool(toVkHandle<vk::QueryPool>(pool), firstQuery, queryCount);
+    }
+
+    void writeTimestamp(const rhi::QueryPool& pool, std::uint32_t query) override {
+        NXT_ASSERT_MSG(pool.valid(), "유효하지 않은 query pool에 timestamp를 쓰려 했다.");
+
+        // AllCommands는 그 시점까지 기록된 명령이 모두 끝난 뒤에 찍히고, queue family의
+        // timestampValidBits와 무관하게 스펙에서 항상 허용된다. 프레임 루프는 render
+        // pass 기록 전후에 부르므로 그 구간이 GPU 실행 시간이 된다.
+        commandBuffer_.writeTimestamp(vk::PipelineStageFlagBits::eAllCommands, toVkHandle<vk::QueryPool>(pool), query);
+    }
+
     void draw(std::uint32_t vertexCount, std::uint32_t instanceCount, std::uint32_t firstVertex,
               std::uint32_t firstInstance) override {
         NXT_ASSERT_MSG(passActive_, "render pass 밖에서 draw를 기록하려 했다.");

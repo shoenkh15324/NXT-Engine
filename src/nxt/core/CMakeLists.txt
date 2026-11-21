@@ -3,6 +3,7 @@
 add_library(nxt_core STATIC
     diagnostics/assert.cpp
     diagnostics/log.cpp
+    diagnostics/profiler.cpp
 )
 
 target_sources(nxt_core
@@ -14,6 +15,7 @@ target_sources(nxt_core
             handle/handle_manager.hpp
             diagnostics/assert.hpp
             diagnostics/log.hpp
+            diagnostics/profiler.hpp
             time/time.hpp
             time/timer.hpp
             memory/allocator.hpp

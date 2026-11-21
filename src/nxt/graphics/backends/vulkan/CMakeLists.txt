@@ -63,6 +63,7 @@ target_sources(nxt_graphics
         frame/vulkan_swapchain.cpp
         frame/vulkan_command_buffer.cpp
         frame/vulkan_fence.cpp
+        frame/vulkan_query.cpp
         frame/vulkan_semaphore.cpp
         frame/vulkan_resource_deletion.cpp
 )

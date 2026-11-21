@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 #include <nxt/graphics/rhi/rhi.hpp>
 #include <nxt/renderer/frame_context.hpp>
 #include <nxt/renderer/passes/triangle_pass.hpp>
@@ -65,8 +66,10 @@ public:
      * @param[in,out] encoder 기록 중인 command buffer의 창구.
      * @param[in]     context 이번 프레임의 부착물 · 크기.
      * @param[in]     world   이번 프레임에 그릴 오브젝트를 가진 렌더 월드.
+     *
+     * @return 이번 프레임에 기록한 draw call 수. FrameStats가 그대로 집계한다.
      */
-    void record(rhi::CommandEncoder& encoder, const FrameContext& context, const World& world) const;
+    std::uint32_t record(rhi::CommandEncoder& encoder, const FrameContext& context, const World& world) const;
 
 private:
     /// @brief 메시를 그리는 패스이다. 셰이더 · 파이프라인 · 정점 버퍼를 소유한다.

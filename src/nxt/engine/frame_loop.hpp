@@ -3,7 +3,11 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <nxt/core/diagnostics/profiler.hpp>
+#include <nxt/core/time/time.hpp>
+#include <nxt/engine/frame_stats.hpp>
 #include <nxt/graphics/rhi/rhi.hpp>
+#include <span>
 #include <vector>
 
 namespace nxt::engine {
@@ -50,8 +54,10 @@ struct FrameTarget {
  *
  * @note encoder만 받는다. Device와 CommandBuffer를 직접 주면 renderer가 GPU 상태를
  *       만질 수 있게 되고, "렌더러는 Vulkan을 모른다"는 경계가 무너진다 (frame.md §3).
+ *
+ * @return 이 프레임에 기록한 draw call 수. FrameStats가 그대로 집계한다.
  */
-using RecordFunction = std::function<void(rhi::CommandEncoder& encoder, const FrameTarget& target)>;
+using RecordFunction = std::function<std::uint32_t(rhi::CommandEncoder& encoder, const FrameTarget& target)>;
 
 /**
  * @brief acquire → record → submit → present를 매 프레임 실행하는 루프다.
@@ -145,6 +151,15 @@ public:
     [[nodiscard]]
     rhi::ResourceDeletion& deletion() noexcept;
 
+    /**
+     * @brief 프레임 지표를 반환한다.
+     *
+     * 엔진이 1초마다 summary()를 읽고 clear()한다. FrameLoop는 로그를 찍지 않는다 —
+     * 로그 I/O가 측정 대상에 섞이면 안 되기 때문이다 (phase1.md §5.6).
+     */
+    [[nodiscard]]
+    FrameStats& stats() noexcept;
+
 private:
     FrameLoop(const rhi::Device& device, rhi::Swapchain& swapchain, RecordFunction record);
 
@@ -162,6 +177,38 @@ private:
 
     /// @brief in-flight fence를 모두 기다린다. 리사이즈와 종료 경로가 쓴다.
     void waitAllFences();
+
+    /**
+     * @brief fence가 신호된 레인의 표본에 GPU 시간을 채워 통계에 넣는다.
+     *
+     * @param[in] frameIndex 표본을 꺼낼 레인.
+     * @param[in] timestamps 그 레인의 timestamp pool.
+     */
+    void completePendingSample(std::uint32_t frameIndex, const rhi::TimestampQueryPool& timestamps);
+
+    /**
+     * @brief 이번 프레임의 표본을 저장한다. GPU 시간은 다음에 이 레인을 쓸 때 채운다.
+     *
+     * @param[in] frameIndex  표본을 둘 레인.
+     * @param[in] frameStart  프레임 시작 시각.
+     * @param[in] submitted   submit가 돌아온 시각.
+     * @param[in] fenceWaitNs fence를 기다린 시간.
+     * @param[in] drawCalls   기록한 draw call 수.
+     */
+    void storePendingSample(std::uint32_t frameIndex, core::time::Timestamp frameStart, core::time::Timestamp submitted,
+                            std::uint64_t fenceWaitNs, std::uint32_t drawCalls) noexcept;
+
+    /// @brief 한 프레임에 찍는 timestamp 수이다. start와 end 둘이다.
+    static constexpr std::uint32_t kTimestampsPerFrame = 2;
+
+    /// @brief 한 레인의, 아직 GPU 시간을 못 채운 표본이다.
+    struct PendingFrameSample {
+        /// @brief 채울 표본이다. valid가 false면 쓰지 않는다.
+        FrameSample sample{};
+
+        /// @brief 이 표본이 유효한지 여부이다.
+        bool valid{false};
+    };
 
     /// @brief 프레임 루프가 소유하는 깊이 이미지이다. swapchain 크기가 바뀌면 다시 만든다.
     rhi::ImageAllocation depthImage_{};
@@ -201,6 +248,21 @@ private:
 
     /// @brief 지금 사용할 레인. frame()이 끝나면 다음 레인으로 넘어간다.
     std::uint32_t frameIndex_ = 0;
+
+    /// @brief 레인마다 timestamp 두 개(start - end)를 담는 query pool이다.
+    std::vector<rhi::TimestampQueryPool> timestampPools_;
+
+    /// @brief 레인마다 하나씩 있는, GPU 시간을 기다리는 표본이다.
+    std::vector<PendingFrameSample> pendingSamples_;
+
+    /// @brief 최근 프레임 지표를 모은다.
+    FrameStats stats_;
+
+    /// @brief CPU 구간 계측기이다. 생성자에서 현재 스레드에 등록한다.
+    core::diag::Profiler profiler_;
+
+    /// @brief timestamp query 지원 여부이다. 미지원이면 fence wait로 근사한다.
+    bool timestampsSupported_{false};
 };
 
 } // namespace nxt::engine

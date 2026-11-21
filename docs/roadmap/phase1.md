@@ -179,9 +179,9 @@ apps/sandbox        CLI 옵션 · 리포트 출력
 
 **서브스텝**
 
-- [ ] **1-A1** — `renderer/world`에 N개 오브젝트(변환·AABB), push constant 경로
+- [x] **1-A1** — `renderer/world`에 N개 오브젝트(변환·AABB), push constant 경로
   - 완료 기준: `--objects N`을 바꾸면 draw call 수가 N과 일치한다
-- [ ] **1-A2** — `FrameStats` · `Profiler` scope 계측 · GPU timestamp query
+- [x] **1-A2** — `FrameStats` · `Profiler` scope 계측 · GPU timestamp query
   - 완료 기준: CPU 프레임과 GPU 프레임이 **따로** 집계된다
 - [ ] **1-A3** — 프러스텀 AABB 컬링 + `DrawList`
   - 완료 기준: 컬링 전/후 draw call 수가 함께 찍힌다

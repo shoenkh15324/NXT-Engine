@@ -98,9 +98,15 @@ public:
     [[nodiscard]]
     vk::PipelineLayout takePipelineLayout(std::uint64_t pipeline) const;
 
+    /// @brief 이 디바이스가 쓴 queue family 인덱스이다 (timestamp 지원 조회).
+    [[nodiscard]]
+    std::uint32_t queueFamilyIndex() const noexcept {
+        return queueFamilyIndex_;
+    }
+
 private:
     VulkanDevice(vk::PhysicalDevice physicalDevice, vk::Device device, vk::CommandPool commandPool,
-                 vk::Queue graphicsQueue, vk::Queue presentQueue) noexcept;
+                 vk::Queue graphicsQueue, vk::Queue presentQueue, std::uint32_t queueFamilyIndex) noexcept;
 
     /// @brief memory type과 surface 지원 조회에 쓴다.
     vk::PhysicalDevice physicalDevice_{};
@@ -124,6 +130,9 @@ private:
      * 모두 백엔드 내부에서만 일어나고 한 스레드에서만 실행된다.
      */
     mutable std::unordered_map<std::uint64_t, vk::PipelineLayout> pipelineLayouts_;
+
+    /// @brief 논리 디바이스를 만든 queue family이다. timestamp 지원 조회에 쓴다.
+    std::uint32_t queueFamilyIndex_{0};
 };
 
 /**
