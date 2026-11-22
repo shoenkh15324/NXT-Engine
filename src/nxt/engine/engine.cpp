@@ -6,6 +6,7 @@
 #include <nxt/core/time/time.hpp>
 #include <nxt/core/time/timer.hpp>
 #include <nxt/engine/engine.hpp>
+#include <nxt/math/frustum.hpp>
 #include <string>
 #include <thread>
 #include <utility>
@@ -58,14 +59,22 @@ Engine::Engine(const EngineDesc& desc, std::unique_ptr<platform::window::Window>
     // 살아야 하므로 멤버 선언 순서도 그에 맞춘다.
     renderer::Renderer* sceneRenderer = renderer_.get();
     renderer::World* sceneWorld = &world_;
+    renderer::DrawList* sceneDrawList = &drawList_;
+    const bool culling = desc.culling;
+
     frameLoop_ = FrameLoop::create(
-        *device_, *swapchain_, [sceneRenderer, sceneWorld](rhi::CommandEncoder& encoder, const FrameTarget& target) {
+        *device_, *swapchain_,
+        [sceneRenderer, sceneWorld, sceneDrawList, culling](rhi::CommandEncoder& encoder, const FrameTarget& target) {
+            renderer::buildDrawList(*sceneWorld, math::Frustum::clipSpace(), culling, *sceneDrawList);
             return sceneRenderer->record(encoder,
-                                         renderer::FrameContext{.color = target.color,
-                                                                .colorFormat = target.colorFormat,
-                                                                .depth = target.depth,
-                                                                .depthFormat = target.depthFormat,
-                                                                .extent = target.extent},
+                                         renderer::FrameContext{
+                                             .color = target.color,
+                                             .colorFormat = target.colorFormat,
+                                             .depth = target.depth,
+                                             .depthFormat = target.depthFormat,
+                                             .extent = target.extent,
+                                             .drawList = sceneDrawList->objects(),
+                                         },
                                          *sceneWorld);
         });
 }

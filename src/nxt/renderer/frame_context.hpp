@@ -1,6 +1,7 @@
 #pragma once
 
 #include <nxt/graphics/rhi/rhi.hpp>
+#include <span>
 
 namespace nxt::renderer {
 
@@ -12,17 +13,19 @@ namespace nxt::renderer {
  */
 namespace rhi = ::nxt::graphics::rhi;
 
+struct WorldObject;
+
 /**
  * @brief 한 프레임 동안만 사는 렌더러 쪽 임시 상태이다.
  *
  * 프레임을 넘어 살아남는 것(월드, GPU 핸들, 메시)은 World가 들고, 이번 프레임을 그리는
- * 동안에만 쓰고 버리는 것을 이 구조체가 든다 (scene_world.md §5). 카메라 행렬, 컬링
- * 결과, 정렬된 draw 목록, 업로드용 임시 버퍼가 앞으로 여기에 붙는다.
+ * 동안에만 쓰고 버리는 것을 이 구조체가 든다 (scene_world.md §5). Phase 1 1-A4는
+ * 컬링 결과인 visible 목록(DrawList의 뷰)까지 들고, 카메라 행렬과 업로드용 임시
+ * 버퍼는 앞으로 여기에 붙는다.
  *
- * Phase 0은 카메라도 컬링도 없으므로 이번 프레임의 부착물과 크기만 든다. engine이
- * 넘긴 engine::FrameTarget을 renderer의 어휘로 옮긴 값이다. 의존 방향이 engine →
- * renderer라서 renderer는 engine을 include할 수 없고, 그 변환은 두 계층을 잇는
- * 쪽(engine 또는 앱)이 한다.
+ * engine이 넘긴 engine::FrameTarget을 renderer의 어휘로 옮긴 값이다. 의존 방향이
+ * engine → renderer라서 renderer는 engine을 include할 수 없고, 그 변환은 두 계층을
+ * 잇는 쪽(engine 또는 앱)이 한다.
  *
  * @note 값 타입이다. 매 프레임 스택에 만들고 제출이 끝나면 버린다.
  * @note Thread safety: thread-safe하지 않다. 기록하는 스레드 하나만 쓴다.
@@ -42,6 +45,17 @@ struct FrameContext {
 
     /// @brief 렌더 영역의 크기이다. 두 부착물의 크기와 같아야 한다.
     rhi::Extent2D extent;
+
+    /**
+     * @brief 이번 프레임에 그릴 visible 오브젝트 목록이다.
+     *
+     * Engine이 buildDrawList()로 채운 DrawList의 뷰를 넘긴다. 비어 있으면
+     * clear만 하고 draw는 기록하지 않는다.
+     *
+     * @note World의 오브젝트를 가리킨다. World를 수정하지 않는 동안, 이번
+     *       프레임 동안만 유효하다.
+     */
+    std::span<const WorldObject* const> drawList{};
 };
 
 /**
