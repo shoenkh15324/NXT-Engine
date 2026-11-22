@@ -17,8 +17,8 @@ namespace rhi = ::nxt::graphics::rhi;
  * 변환 행렬과 색뿐이므로, draw 직전에 push constant로 넘긴다. 정점 10만 개를
  * 업로드하지 않으므로 측정 대상이 정점 메모리 대역폭으로 바뀌지 않는다.
  *
- * 인덱스 · 머티리얼 · 텍스처는 아직 없다. 1-A3의 컬링 결과(DrawList)는 이 패스에
- * span으로 전달된다.
+ * 인덱스 · 머티리얼 · 텍스처는 아직 없다. 1-A4의 컬링 결과(DrawList)는 이 패스에
+ * 포인터 span으로 전달된다.
  *
  * @note 수명을 가진 객체다. 디바이스보다 먼저 만들어지고 디바이스보다 먼저
  *       파괴되어야 한다.
@@ -66,7 +66,7 @@ public:
      * @note draw call 수는 objects.size()와 같다.
      */
     void record(rhi::CommandEncoder& encoder, const rhi::RenderPassDesc& target,
-                std::span<const WorldObject> objects) const;
+                std::span<const WorldObject* const> objects) const;
 
 private:
     /// @brief 단위 삼각형 정점 세 개를 담은 정점 버퍼를 만든다. 생성자에서 한 번만 부른다.

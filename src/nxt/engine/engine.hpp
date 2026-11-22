@@ -5,6 +5,7 @@
 #include <nxt/engine/frame_loop.hpp>
 #include <nxt/graphics/rhi/rhi.hpp>
 #include <nxt/platform/window/window.hpp>
+#include <nxt/renderer/draw_list.hpp>
 #include <nxt/renderer/renderer.hpp>
 #include <nxt/renderer/world/world.hpp>
 #include <span>
@@ -35,6 +36,9 @@ struct EngineDesc {
 
     /// @brief 프래그먼트 단계 SPIR-V 워드 배열이다.
     std::span<const std::uint32_t> fragmentShader;
+
+    /// @brief 프러스텀 컬링을 켤지 여부이다. false면 모든 오브젝트를 그린다.
+    bool culling = true;
 };
 
 /**
@@ -145,6 +149,9 @@ private:
 
     /// @brief 지속 상태인 렌더 월드이다. 앱이 run() 전에 채운다.
     renderer::World world_;
+
+    /// @brief 이번 프레임에 그릴 visible 목록이다. 프레임 루프가 참조한다.
+    renderer::DrawList drawList_;
 
     /// @brief 프레임 루프를 소유한다. 렌더러를 참조로 잡으므로 렌더러보다 먼저 파괴한다.
     std::unique_ptr<FrameLoop> frameLoop_;

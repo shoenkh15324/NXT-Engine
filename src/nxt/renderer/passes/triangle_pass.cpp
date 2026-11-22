@@ -118,7 +118,7 @@ void TrianglePass::createUnitTriangle() {
 }
 
 void TrianglePass::record(rhi::CommandEncoder& encoder, const rhi::RenderPassDesc& target,
-                          std::span<const WorldObject> objects) const {
+                          std::span<const WorldObject* const> objects) const {
     encoder.beginRenderPass(target);
 
     // 그릴 것이 없어도 pass는 열고 닫는다. clear는 매 프레임 필요하다.
@@ -132,10 +132,10 @@ void TrianglePass::record(rhi::CommandEncoder& encoder, const rhi::RenderPassDes
 
         encoder.setVertexBuffer(kVertexBinding, vertexBuffer_.buffer);
 
-        for (const WorldObject& object : objects) {
+        for (const WorldObject* object : objects) {
             const TrianglePushConstants constants{
-                .transform = object.transform,
-                .color = {object.color.x, object.color.y, object.color.z, 1.0f},
+                .transform = object->transform,
+                .color = {object->color.x, object->color.y, object->color.z, 1.0f},
             };
 
             encoder.pushConstants(rhi::ShaderStage::Vertex, std::as_bytes(std::span{&constants, 1}));

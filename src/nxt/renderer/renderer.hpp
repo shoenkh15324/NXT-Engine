@@ -57,17 +57,17 @@ public:
     Renderer& operator=(Renderer&&) = delete;
 
     /**
-     * @brief World의 오브젝트를 이번 프레임에 기록한다.
+     * @brief 이번 프레임의 visible 목록을 기록한다.
      *
-     * 프레임 임시 상태에서 render pass 기술자를 만들고, World의 오브젝트 목록을
-     * 삼각형 패스에 넘긴다. 오브젝트가 없어도 clear는 한다 — swapchain 이미지의
-     * 내용은 acquire할 때마다 보장되지 않는다 (frame.md §4).
+     * 프레임 임시 상태에서 render pass 기술자를 만들고, context.drawList의
+     * 오브젝트를 삼각형 패스에 넘긴다. 목록이 비어 있어도 clear는 한다 —
+     * swapchain 이미지의 내용은 acquire할 때마다 보장되지 않는다 (frame.md §4).
      *
      * @param[in,out] encoder 기록 중인 command buffer의 창구.
-     * @param[in]     context 이번 프레임의 부착물 · 크기.
-     * @param[in]     world   이번 프레임에 그릴 오브젝트를 가진 렌더 월드.
+     * @param[in]     context 이번 프레임의 부착물 · 크기 · visible 목록.
+     * @param[in]     world   전체 오브젝트 수를 로그로 남기기 위한 렌더 월드.
      *
-     * @return 이번 프레임에 기록한 draw call 수. FrameStats가 그대로 집계한다.
+     * @return 이번 프레임에 기록한 draw call 수. context.drawList.size()와 같다.
      */
     std::uint32_t record(rhi::CommandEncoder& encoder, const FrameContext& context, const World& world) const;
 
@@ -77,6 +77,9 @@ private:
 
     /// @brief 마지막으로 기록한 오브젝트 수이다. 같은 수를 매 프레임 로그하지 않으려고 둔다.
     mutable std::size_t recordedObjectCount_ = 0;
+
+    /// @brief 마지막으로 기록한 visible 수이다. 같은 수를 매 프레임 로그하지 않으려고 둔다.
+    mutable std::size_t recordedVisibleCount_ = 0;
 };
 
 } // namespace nxt::renderer

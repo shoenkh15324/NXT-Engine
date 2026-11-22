@@ -17,7 +17,7 @@ namespace nxt::renderer {
  * 정점 메모리 대역폭으로 바뀌지 않게 하기 위해서다 (phase1.md 1-A).
  *
  * bounds는 transform을 적용한 뒤의 축 정렬 경계 상자이다. 1-A1은 이것을 저장만
- * 하고, 1-A3의 프러스텀 컬링이 처음 소비한다.
+ * 하고, 1-A4의 프러스텀 컬링이 처음 소비한다.
  *
  * @note 값 타입이다. World가 vector로 소유한다.
  */
