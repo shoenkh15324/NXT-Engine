@@ -112,12 +112,21 @@ void Engine::logFrameSummary() {
     frameLoop_->stats().clear();
 
     if (summary.frames == 0) {
+        // 워밍업 중에는 버린 표본만 있어 요약할 것이 없다. 왜 로그가 없는지 알 수 있게
+        // 남은 프레임 수를 알린다. clear()는 워밍업 카운터를 건드리지 않는다.
+        if (frameLoop_->stats().isWarmingUp()) {
+            NXT_LOG_INFO(Engine, FrameLoop, "warmup: {} frames left", frameLoop_->stats().warmupRemaining());
+        }
         return;
     }
 
-    // timestamp를 못 쓰면 fence wait가 GPU 시간의 근사치이고, 로그는 "~"로 표시한다.
-    NXT_LOG_INFO(Engine, FrameLoop, "frame: n={} cpu={:.2f}ms gpu={}{:.2f}ms fence={:.2f}ms draws={}", summary.frames,
-                 summary.cpuFrameMs, summary.gpuApproximate ? "~" : "", summary.gpuFrameMs, summary.fenceWaitMs,
+    // 평균 대신 중앙값과 p95를 남긴다. 평균은 한두 번 튀는 프레임에 끌려가서 "이 설정의
+    // 비용"을 대표하지 못한다 (phase1.md §3).
+    NXT_LOG_INFO(Engine, FrameLoop,
+                 "frame: n={} cpu p50={:.2f} p95={:.2f}ms gpu{} p50={:.2f} p95={:.2f}ms fence p50={:.2f} "
+                 "p95={:.2f}ms draws={}",
+                 summary.frames, summary.cpuFrameMs, summary.cpuFrameP95Ms, summary.gpuApproximate ? "~" : "",
+                 summary.gpuFrameMs, summary.gpuFrameP95Ms, summary.fenceWaitMs, summary.fenceWaitP95Ms,
                  summary.drawCalls);
 
     if (summary.segmentCount == 0) {
@@ -129,7 +138,8 @@ void Engine::logFrameSummary() {
         if (index != 0) {
             segments += ' ';
         }
-        segments += std::format("{}={:.2f}ms", summary.segments[index].name, toMs(summary.segments[index].ns));
+        segments += std::format("{} p50={:.2f} p95={:.2f}ms", summary.segments[index].name,
+                                summary.segments[index].medianMs, summary.segments[index].p95Ms);
     }
     NXT_LOG_INFO(Engine, FrameLoop, "cpu : {}", segments);
 }
