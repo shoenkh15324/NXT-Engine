@@ -15,4 +15,5 @@ target_sources(nxt_math INTERFACE
         math/vec3.hpp
         math/mat4.hpp
         math/aabb.hpp
+        math/frustum.hpp
 )

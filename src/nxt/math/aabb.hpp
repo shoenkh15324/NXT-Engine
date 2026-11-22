@@ -1,5 +1,6 @@
 #pragma once
 
+#include <nxt/math/frustum.hpp>
 #include <nxt/math/mat4.hpp>
 #include <nxt/math/vec3.hpp>
 
@@ -69,6 +70,38 @@ constexpr Aabb transformed(const Aabb& bounds, const Mat4& matrix) noexcept {
     }
 
     return {.min = minimum, .max = maximum};
+}
+
+/**
+ * @brief AABB가 프러스텀과 겹치는지 판정한다.
+ *
+ * 각 평면에 대해 상자에서 법선 방향으로 가장 먼 꼭짓점을 고른다. 그 점이
+ * 평면 바깥이면 상자 전체가 그 평면 바깥에 있으므로 겹치지 않는다. 모든
+ * 평면에서 이 검사를 통과하면 내부이거나 경계를 걸친 것으로 본다.
+ *
+ * 이 판정은 보수적이다. 프러스텀 밖에 있지만 어떤 평면 하나의 완전한 바깥쪽에
+ * 있지 않은 상자는 visible로 남는다. 컬링은 그려야 할 것을 지우지 않는 쪽이
+ * 안전하므로 이 근사를 쓴다.
+ *
+ * @param[in] bounds  판정할 축 정렬 상자. 프러스텀과 같은 공간에 있어야 한다.
+ * @param[in] frustum 판정에 쓸 프러스텀.
+ * @return 상자가 프러스텀 안쪽이거나 경계를 걸치면 true, 완전히 바깥이면 false.
+ */
+[[nodiscard]]
+constexpr bool intersects(const Aabb& bounds, const Frustum& frustum) noexcept {
+    for (const Plane& plane : frustum.planes) {
+        const Vec3 farthest{
+            plane.normal.x >= 0.0f ? bounds.max.x : bounds.min.x,
+            plane.normal.y >= 0.0f ? bounds.max.y : bounds.min.y,
+            plane.normal.z >= 0.0f ? bounds.max.z : bounds.min.z,
+        };
+
+        if ((dot(plane.normal, farthest) + plane.distance) < 0.0f) {
+            return false;
+        }
+    }
+
+    return true;
 }
 
 } // namespace nxt::math
