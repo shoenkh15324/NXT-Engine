@@ -69,6 +69,23 @@ TEST_CASE("clear()는 표본을 비우고 워밍업 카운터는 유지한다.")
     CHECK(stats.summary().frames == 1);
 }
 
+TEST_CASE("창의 프레임 수는 표본 용량을 넘어도 정확히 센다.") {
+    engine::FrameStats stats{0};
+
+    const std::size_t total = engine::FrameStats::kCapacity + 60;
+    for (std::size_t index = 0; index < total; ++index) {
+        stats.add(makeSample(1));
+    }
+
+    // 표본 버퍼는 용량에서 멈추지만, 이번 창에서 완료된 프레임 수는 계속 센다.
+    // fps는 이 값에서 내므로 240fps 이상에서도 프레임률을 알 수 있어야 한다.
+    CHECK(stats.count() == engine::FrameStats::kCapacity);
+    CHECK(stats.summary().frames == total);
+
+    stats.clear();
+    CHECK(stats.summary().frames == 0);
+}
+
 TEST_CASE("중앙값은 홀수 표본에서 가운데 값이다.") {
     engine::FrameStats stats{0};
 

@@ -20,6 +20,20 @@
             }
         },
         {
+            "name": "msvc-bench",
+            "displayName": "MSVC RelWithDebInfo (benchmark)",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build/msvc-bench",
+            "cacheVariables": {
+                "CMAKE_CXX_COMPILER": "cl",
+                "CMAKE_CXX_STANDARD": "20",
+                "CMAKE_CXX_STANDARD_REQUIRED": "ON",
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+                "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+                "NXT_BUILD_TESTS": "OFF"
+            }
+        },
+        {
             "name": "mingw",
             "displayName": "MinGW (Ninja)",
             "generator": "Ninja",
@@ -45,6 +59,12 @@
             "displayName": "MSVC Release",
             "configurePreset": "msvc",
             "configuration": "Release"
+        },
+        {
+            "name": "msvc-bench",
+            "displayName": "MSVC RelWithDebInfo",
+            "configurePreset": "msvc-bench",
+            "configuration": "RelWithDebInfo"
         },
         {
             "name": "mingw-debug",

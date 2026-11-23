@@ -5,7 +5,7 @@
 >
 > 최종 산출물은 빠른 렌더러가 아니라 **병목 판단 절차와 기준선**이다.
 
-**상태**: 1-A4까지 완료. 1-A5부터 진행한다.
+**상태**: 1-A6까지 완료. 1-B1부터 진행한다.
 
 ---
 
@@ -121,23 +121,29 @@
   - 1초 요약과 종료 요약을 중앙값 · p95로 바꾼다.
 - **완료 조건:** 같은 설정 3회 실행의 중앙값 · p95 편차가 기록된다.
 
-### 1-A6 — 기준선 측정과 게이트 A 판정
+### 1-A6 — 기준선 측정과 게이트 A 판정 (완료)
 
 - **목표:** 이후 비교의 기준이 되는 기준선 표를 만든다.
 - **작업 내용:**
-  - `objects=100000`으로 컬링 off/on을 각 3회 실행한다.
+  - `objects=100000`으로 컬링 off/on을 각 3회 이상 실행한다.
   - cpu frame · gpu frame · fence wait · draw 수 · throughput을 기록한다.
+  - 주사율 고정(present)과 즉시 제시(immediate)를 함께 재고, 판정에는 immediate를 쓴다.
   - `docs/benchmarks/phase1-baseline.md`(신규)에 표를 남긴다.
   - 게이트 A를 판정한다.
 - **완료 조건:** 기준선 표와 게이트 A 판정이 문서에 남는다.
+- **결과:** [phase1-baseline.md](../benchmarks/phase1-baseline.md) — immediate 7회 × 2설정.
+  fence p50 = 0, cpu 3.845 / 2.890ms, gpu 1.040 / 0.680ms. **CPU-bound → 1-B 전체.**
 
 **게이트 A — 1-B의 범위를 정한다**
 
-- `cpu frame`이 예산을 넘고 `gpu frame`이 그보다 작다 → CPU-bound. 1-B 전체를 진행한다.
+- `cpu frame`이 `gpu frame`보다 크고 fps를 제한한다 → CPU-bound. 1-B 전체를 진행한다.
 - `gpu frame`이 `cpu frame` 이상이거나 `fence wait`가 크다 → GPU-bound. 1-B는 인프라
   (1-B1~1-B7, 1-B9)만 하고 1-B8은 생략한다. 배칭·인스턴싱은 Phase 3 후보로 기록한다.
-- 둘 다 예산 이하인데 fps만 낮다 → present/vsync와 계측 지점을 먼저 확인한다.
+- 둘 다 16.67ms 미만이고 fps도 충분하다 → 병목이 없다. 오브젝트 수를 올린 스윕으로 어느
+  쪽이 먼저 포화되는지 확인한 뒤 판정한다. 16.67ms는 판정식이 아니라 목표 예산 플래그다.
 - 실행마다 편차가 크다 → 1-A5로 돌아간다. 이 숫자는 기준선이 아니다.
+- 주사율 고정(FIFO)에서는 `cpu frame`이 vsync 대기를 포함한다. 판정은 주사율을 풀고
+  (immediate) 잰 값으로 한다.
 
 ---
 

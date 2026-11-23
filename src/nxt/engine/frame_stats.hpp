@@ -68,7 +68,10 @@ using FrameSegmentSummaries = std::array<SegmentSummary, core::diag::kMaxSamples
  * 20개 이하이면 p95는 최댓값과 같다.
  */
 struct FrameSummary {
-    /// @brief 요약에 포함된 프레임 수이다. 워밍업 표본은 세지 않는다. 0이면 표본이 없다.
+    /// @brief 이번 창에서 완료된 프레임 수이다. 워밍업 표본은 세지 않는다. 0이면 표본이 없다.
+    ///
+    /// 표본 버퍼(kCapacity)보다 클 수 있다. 퍼센타일은 최근 kCapacity개 표본으로만
+    /// 계산하므로, 프레임률이 높으면 요약 구간이 1초보다 짧아진다.
     std::size_t frames{0};
 
     /// @brief cpu frame 중앙값(밀리초)이다.
@@ -181,6 +184,12 @@ private:
 
     /// @brief 아직 버릴 워밍업 표본 수이다.
     std::size_t warmupRemaining_{kWarmupFrames};
+
+    /// @brief 이번 창에 들어온 프레임 수이다. kCapacity와 무관하게 센다.
+    ///
+    /// count_는 버퍼 용량에서 멈추지만, fps를 내려면 실제 프레임 수가 필요하다.
+    /// 240fps를 넘으면 count_가 kCapacity에서 포화돼 프레임률을 알 수 없다.
+    std::size_t windowFrames_{0};
 
     /// @brief 첫 측정 표본이 들어온 이후인지 여부이다.
     bool measuring_{false};

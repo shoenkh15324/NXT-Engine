@@ -239,9 +239,8 @@ bool VulkanSwapchain::createSwapchain(vk::SwapchainKHR oldSwapchain) {
         imageViews_.push_back(view.value);
     }
 
-    NXT_LOG_DEBUG(Graphics, Vulkan, "swapchain created: images={} extent={}x{} format={} present={}",
-                  imageViews_.size(), extent_.width, extent_.height, vk::to_string(createInfo.imageFormat),
-                  vk::to_string(presentMode));
+    NXT_LOG_INFO(Graphics, Vulkan, "swapchain created: images={} extent={}x{} format={} present={}", imageViews_.size(),
+                 extent_.width, extent_.height, vk::to_string(createInfo.imageFormat), vk::to_string(presentMode));
     return true;
 }
 
