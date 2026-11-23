@@ -1,9 +1,13 @@
 # src/nxt/core/CMakeLists.txt
 
+# std::thread는 플랫폼별 스레드 라이브러리를 요구한다(MinGW의 -pthread 등).
+find_package(Threads REQUIRED)
+
 add_library(nxt_core STATIC
     diagnostics/assert.cpp
     diagnostics/log.cpp
     diagnostics/profiler.cpp
+    jobs/std_thread_source.cpp
 )
 
 target_sources(nxt_core
@@ -21,9 +25,13 @@ target_sources(nxt_core
             memory/allocator.hpp
             memory/arena.hpp
             memory/pool.hpp
+            jobs/thread_source.hpp
+            jobs/std_thread_source.hpp
 )
 
 target_include_directories(nxt_core PUBLIC "${PROJECT_SOURCE_DIR}/src")
+
+target_link_libraries(nxt_core PUBLIC Threads::Threads)
 
 if(MSVC)
     target_compile_options(nxt_core PRIVATE /W4)
