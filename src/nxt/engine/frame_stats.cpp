@@ -99,6 +99,7 @@ void FrameStats::add(const FrameSample& sample) noexcept {
     }
 
     measuring_ = true;
+    ++windowFrames_;
     samples_[next_] = sample;
     next_ = (next_ + 1) % kCapacity;
     if (count_ < kCapacity) {
@@ -142,7 +143,7 @@ FrameSummary FrameStats::summary() const noexcept {
     const std::size_t newestIndex = (next_ + kCapacity - 1) % kCapacity;
     const FrameSample& newest = samples_[newestIndex];
 
-    result.frames = count_;
+    result.frames = windowFrames_;
     result.cpuFrameMs = medianMs(cpu);
     result.cpuFrameP95Ms = p95Ms(cpu);
     result.fenceWaitMs = medianMs(fence);
@@ -174,6 +175,7 @@ FrameSummary FrameStats::summary() const noexcept {
 void FrameStats::clear() noexcept {
     count_ = 0;
     next_ = 0;
+    windowFrames_ = 0;
 }
 
 } // namespace nxt::engine

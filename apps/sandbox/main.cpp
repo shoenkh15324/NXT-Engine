@@ -12,6 +12,7 @@
 #include <nxt/platform/backends/windows/log_sink/win32_console_log_sink.hpp>
 #include <nxt/platform/backends/windows/log_sink/win32_file_log_sink.hpp>
 #include <nxt/renderer/world/world.hpp>
+#include <optional>
 #include <string_view>
 #include <system_error>
 #include <vector>
@@ -32,10 +33,43 @@ struct CommandLineOptions {
 
     /// @brief 프러스텀 컬링을 켤지 여부이다.
     bool culling = true;
+
+    /**
+     * @brief 로그 최소 레벨이다.
+     *
+     * 비어 있으면 LogManager::defaultLevel()을 쓴다. Release/RelWithDebInfo의 기본값은
+     * Error라 기준선 측정에 필요한 frame 요약이 사라진다. 그때 --log-level info로 올린다.
+     */
+    std::optional<nxt::core::log::LogLevel> logLevel;
+
+    /// @brief 화면 제시 방식이다. 기준선 측정에서 vsync를 끄려면 immediate를 쓴다.
+    nxt::graphics::rhi::PresentMode presentMode = nxt::graphics::rhi::PresentMode::Fifo;
 };
 
 /**
- * @brief 명령행에서 --objects N과 --culling on|off를 읽는다.
+ * @brief 제시 방식을 로그에 쓸 이름으로 바꾼다.
+ *
+ * @param[in] mode 제시 방식.
+ * @return 짧은 이름. 로그에서 설정을 구분하는 데만 쓴다.
+ */
+[[nodiscard]]
+const char* presentModeName(nxt::graphics::rhi::PresentMode mode) noexcept {
+    using nxt::graphics::rhi::PresentMode;
+    switch (mode) {
+        case PresentMode::Fifo:
+            return "fifo";
+        case PresentMode::FifoRelaxed:
+            return "fifo-relaxed";
+        case PresentMode::Mailbox:
+            return "mailbox";
+        case PresentMode::Immediate:
+            return "immediate";
+    }
+    return "unknown";
+}
+
+/**
+ * @brief 명령행에서 --objects N · --culling on|off · --log-level LEVEL · --present MODE를 읽는다.
  *
  * 잘못된 값이나 모르는 인자는 오류로 처리해, 벤치마크가 조용히 다른 설정으로
  * 도는 일을 막는다.
@@ -85,6 +119,53 @@ bool parseArguments(int argc, char* argv[], CommandLineOptions& options) {
                 options.culling = false;
             } else {
                 std::fprintf(stderr, "invalid --culling: %.*s\n", static_cast<int>(text.size()), text.data());
+                return false;
+            }
+            continue;
+        }
+
+        if (argument == "--log-level") {
+            if ((index + 1) >= argc) {
+                std::fprintf(stderr, "--log-level requires trace|debug|info|warn|error|fatal\n");
+                return false;
+            }
+
+            const std::string_view text{argv[++index]};
+            if (text == "trace") {
+                options.logLevel = nxt::core::log::LogLevel::Trace;
+            } else if (text == "debug") {
+                options.logLevel = nxt::core::log::LogLevel::Debug;
+            } else if (text == "info") {
+                options.logLevel = nxt::core::log::LogLevel::Info;
+            } else if (text == "warn") {
+                options.logLevel = nxt::core::log::LogLevel::Warn;
+            } else if (text == "error") {
+                options.logLevel = nxt::core::log::LogLevel::Error;
+            } else if (text == "fatal") {
+                options.logLevel = nxt::core::log::LogLevel::Fatal;
+            } else {
+                std::fprintf(stderr, "invalid --log-level: %.*s\n", static_cast<int>(text.size()), text.data());
+                return false;
+            }
+            continue;
+        }
+
+        if (argument == "--present") {
+            if ((index + 1) >= argc) {
+                std::fprintf(stderr, "--present requires fifo|mailbox|immediate\n");
+                return false;
+            }
+
+            const std::string_view text{argv[++index]};
+            using nxt::graphics::rhi::PresentMode;
+            if (text == "fifo") {
+                options.presentMode = PresentMode::Fifo;
+            } else if (text == "mailbox") {
+                options.presentMode = PresentMode::Mailbox;
+            } else if (text == "immediate") {
+                options.presentMode = PresentMode::Immediate;
+            } else {
+                std::fprintf(stderr, "invalid --present: %.*s\n", static_cast<int>(text.size()), text.data());
                 return false;
             }
             continue;
@@ -213,11 +294,13 @@ int main(int argc, char* argv[]) {
     nxt::core::log::LogSink* sinks[] = {&consoleSink, &fileSink};
     nxt::core::log::LogManager manager(sinks);
 
-    nxt::core::log::setLogManager(manager);
+    // Release/RelWithDebInfo의 기본 레벨은 Error라 frame 요약이 남지 않는다. 기준선
+    // 측정처럼 INFO가 필요하면 --log-level info로 올린다.
+    if (options.logLevel) {
+        manager.setLevel(*options.logLevel);
+    }
 
-    // 레벨을 직접 지정하지 않는다. LogManager::defaultLevel()이 Debug는 Debug,
-    // Release는 Error를 정한다. 여기서 덮어쓰면 배포본까지 조용해지지 않는다.
-    // 더 낮게 내려야 하면 setLevel()을 호출하되, 그 판단은 앱의 책임이다.
+    nxt::core::log::setLogManager(manager);
 
     NXT_LOG_INFO(Engine, None, "Initializing NXT Engine");
 
@@ -240,11 +323,14 @@ int main(int argc, char* argv[]) {
     // 창 · instance · device · swapchain · 렌더러 · 프레임 루프를 엔진이 조립하고
     // 소유한다. 앱은 셰이더와 창 설정만 넘긴다. 셰이더 배열은 create()가 끝나면
     // 버려도 된다 — 파이프라인을 만드는 동안만 읽는다.
-    auto engineInstance = engine::Engine::create(engine::EngineDesc{.appName = "NXT Sandbox",
-                                                                    .window = {.title = "NXT Sandbox"},
-                                                                    .vertexShader = vertexShader,
-                                                                    .fragmentShader = fragmentShader,
-                                                                    .culling = options.culling});
+    auto engineInstance = engine::Engine::create(engine::EngineDesc{
+        .appName = "NXT Sandbox",
+        .window = {.title = "NXT Sandbox"},
+        .vertexShader = vertexShader,
+        .fragmentShader = fragmentShader,
+        .culling = options.culling,
+        .presentMode = options.presentMode,
+    });
     if (!engineInstance) {
         return 1;
     }
@@ -254,8 +340,9 @@ int main(int argc, char* argv[]) {
     buildWorld(engineInstance->world(), options.objectCount);
     // 컬링 설정도 함께 남긴다. 같은 objects 수에서 culling on/off를 구분하지 못하면
     // 로그만 보고 어느 설정의 결과인지 판단할 수 없다.
-    NXT_LOG_INFO(Renderer, World, "world built: objects={} culling={}", engineInstance->world().objectCount(),
-                 options.culling ? "on" : "off");
+    NXT_LOG_INFO(Renderer, World, "world built: objects={} culling={} present={}",
+                 engineInstance->world().objectCount(), options.culling ? "on" : "off",
+                 presentModeName(options.presentMode));
 
     // 창이 닫힐 때까지 이벤트 · 프레임 · 리사이즈 · fps 로그를 엔진이 처리한다.
     engineInstance->run();

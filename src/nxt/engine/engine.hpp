@@ -39,6 +39,13 @@ struct EngineDesc {
 
     /// @brief 프러스텀 컬링을 켤지 여부이다. false면 모든 오브젝트를 그린다.
     bool culling = true;
+
+    /// @brief 화면 제시 방식이다. Fifo는 vsync로 프레임을 주사율에 묶는다.
+    ///
+    /// 기준선 측정에서 프레임 pacing을 없애려면 Immediate나 Mailbox를 넘긴다.
+    /// 지원하지 않는 모드는 백엔드가 Fifo로 되돌리고 WARN을 남긴다
+    /// (vulkan_swapchain.cpp의 choosePresentMode).
+    rhi::PresentMode presentMode = rhi::PresentMode::Fifo;
 };
 
 /**

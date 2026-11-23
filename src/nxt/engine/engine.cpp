@@ -3,7 +3,7 @@
 #include <cstdint>
 #include <format>
 #include <nxt/core/diagnostics/log.hpp>
-#include <nxt/core/time/time.hpp>
+#include <nxt/core/diagnostics/profiler.hpp>
 #include <nxt/core/time/timer.hpp>
 #include <nxt/engine/engine.hpp>
 #include <nxt/math/frustum.hpp>
@@ -17,16 +17,6 @@ namespace {
 
 /// @brief 프레임 요약을 로그로 남기는 주기(밀리초)이다.
 constexpr std::uint64_t kReportIntervalMs = 1000;
-
-/**
- * @brief 나노초를 밀리초로 바꾼다.
- * @param[in] ns 바꿀 나노초.
- * @return 밀리초 값.
- */
-[[nodiscard]]
-double toMs(std::uint64_t ns) noexcept {
-    return static_cast<double>(ns) / static_cast<double>(core::time::kNsPerMs);
-}
 
 } // namespace
 
@@ -48,7 +38,8 @@ Engine::Engine(const EngineDesc& desc, std::unique_ptr<platform::window::Window>
     instance_ = rhi::Instance::create(rhi::InstanceDesc{.appName = desc.appName});
     surface_ = instance_->createSurface(window_->native());
     device_ = instance_->createDevice(rhi::DeviceDesc{.surface = surface_});
-    swapchain_ = rhi::Swapchain::create(*device_, rhi::SwapchainDesc{.surface = surface_});
+    swapchain_ =
+        rhi::Swapchain::create(*device_, rhi::SwapchainDesc{.surface = surface_, .presentMode = desc.presentMode});
 
     // 파이프라인이 두 부착물의 형식을 알아야 하므로 swapchain 뒤에 만든다. 깊이 형식은
     // 프레임 루프가 이미지를 만들 때 쓰는 값과 같아야 한다.
@@ -65,7 +56,12 @@ Engine::Engine(const EngineDesc& desc, std::unique_ptr<platform::window::Window>
     frameLoop_ = FrameLoop::create(
         *device_, *swapchain_,
         [sceneRenderer, sceneWorld, sceneDrawList, culling](rhi::CommandEncoder& encoder, const FrameTarget& target) {
-            renderer::buildDrawList(*sceneWorld, math::Frustum::clipSpace(), culling, *sceneDrawList);
+            // 컬링 비용을 기록 비용과 분리해 잰다. record 구간은 컬링을 포함한 합계이므로,
+            // 1-B8(병렬 컬링)의 이득을 재려면 이 구간이 따로 있어야 한다 (phase1.md §3).
+            {
+                NXT_PROFILE_SCOPE("cull");
+                renderer::buildDrawList(*sceneWorld, math::Frustum::clipSpace(), culling, *sceneDrawList);
+            }
             return sceneRenderer->record(encoder,
                                          renderer::FrameContext{
                                              .color = target.color,
