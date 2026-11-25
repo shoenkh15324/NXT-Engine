@@ -45,6 +45,35 @@
                 "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
                 "NXT_BUILD_TESTS": "ON"
             }
+        },
+        {
+            "name": "gcc",
+            "displayName": "GCC (Ninja, Linux)",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build/gcc",
+            "cacheVariables": {
+                "CMAKE_C_COMPILER": "gcc",
+                "CMAKE_CXX_COMPILER": "g++",
+                "CMAKE_CXX_STANDARD": "20",
+                "CMAKE_CXX_STANDARD_REQUIRED": "ON",
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+                "NXT_BUILD_TESTS": "ON"
+            }
+        },
+        {
+            "name": "gcc-bench",
+            "displayName": "GCC RelWithDebInfo (Linux benchmark)",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build/gcc-bench",
+            "cacheVariables": {
+                "CMAKE_C_COMPILER": "gcc",
+                "CMAKE_CXX_COMPILER": "g++",
+                "CMAKE_CXX_STANDARD": "20",
+                "CMAKE_CXX_STANDARD_REQUIRED": "ON",
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+                "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+                "NXT_BUILD_TESTS": "OFF"
+            }
         }
     ],
     "buildPresets": [
@@ -77,6 +106,21 @@
             "displayName": "Mingw Release",
             "configurePreset": "mingw",
             "configuration": "Release"
+        },
+        {
+            "name": "gcc-debug",
+            "displayName": "GCC Debug (Linux)",
+            "configurePreset": "gcc"
+        },
+        {
+            "name": "gcc-release",
+            "displayName": "GCC Release (Linux)",
+            "configurePreset": "gcc"
+        },
+        {
+            "name": "gcc-bench",
+            "displayName": "GCC RelWithDebInfo (Linux)",
+            "configurePreset": "gcc-bench"
         }
     ],
     "testPresets": [
@@ -94,6 +138,14 @@
             "displayName": "MinGW Tests",
             "configurePreset": "mingw",
             "configuration": "Debug",
+            "output": {
+                "outputOnFailure": true
+            }
+        },
+        {
+            "name": "gcc",
+            "displayName": "GCC Tests (Linux)",
+            "configurePreset": "gcc",
             "output": {
                 "outputOnFailure": true
             }
