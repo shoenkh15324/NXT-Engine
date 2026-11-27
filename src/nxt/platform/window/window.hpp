@@ -11,17 +11,15 @@ namespace nxt::platform::window {
  *
  * 창 식별자 하나만으로는 surface를 만들 수 없는 창 시스템이 있다.
  * Win32는 { hinstance, hwnd }를 요구하지만 hinstance는 GetModuleHandle(nullptr)로
- * 대체할 수 있어 필드를 늘리지 않는다. X11과 Wayland는 연결 객체까지 요구한다.
+ * 대체할 수 있어 필드를 늘리지 않는다. Wayland는 display 연결 객체까지 요구한다.
  * 그 차이를 여기서 흡수한다. 인터페이스를 깨지 않으면서 Linux 백엔드를 붙이려면
  * 이 필드가 먼저 있어야 한다.
  *
  * @note Window가 살아 있는 동안에만 유효하다. 창이 닫히면 dangling이 된다.
- * @note 포인터 크기로 승격하지 않은 XID가 handle에 들어가는 경우, 포인터 크기로
- *       변환해 담는다.
  */
 struct NativeWindow {
-    void* handle{nullptr};  ///< HWND | xcb_window_t 승격값 | wl_surface*
-    void* display{nullptr}; ///< 연결 객체. Win32는 항상 nullptr.
+    void* handle{nullptr};  ///< HWND | wl_surface*
+    void* display{nullptr}; ///< 연결 객체. Win32는 항상 nullptr, Wayland는 wl_display*.
 };
 
 /**

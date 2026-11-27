@@ -34,6 +34,8 @@ elseif(UNIX AND NOT APPLE)
         PRIVATE
             linux/log_sink/posix_console_log_sink.cpp
             linux/log_sink/posix_file_log_sink.cpp
+            linux/linux_window.cpp
+            linux/wayland/wayland_window.cpp
     )
 
     # 이 백엔드의 헤더는 공개 계약이 아니므로 별도 FILE_SET으로 등록한다.
@@ -45,5 +47,6 @@ elseif(UNIX AND NOT APPLE)
             FILES
                 linux/log_sink/posix_console_log_sink.hpp
                 linux/log_sink/posix_file_log_sink.hpp
+                linux/wayland/wayland_window.hpp
     )
 endif()
