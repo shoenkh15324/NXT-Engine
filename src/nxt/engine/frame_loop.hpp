@@ -134,13 +134,16 @@ public:
      * 리사이즈 순서를 이 함수가 지킨다 (frame.md §6): in-flight fence를 모두 기다리고,
      * device를 idle로 만든 뒤, 레인을 버리고 swapchain을 재생성하고, 레인을 새로 만든다.
      *
+     * @param[in] extent 최신 창의 픽셀 크기. surface가 크기를 알려 주지 않는 Wayland에서
+     *                   swapchain이 이 값을 쓴다. Win32는 surface의 currentExtent를 쓴다.
+     *
      * @note 이미지 개수가 같아도 레인을 다시 만든다. present가 실패하면 그 semaphore의
      *       wait이 수행되지 않아 신호된 채 남을 수 있고, 남은 신호를 물려받으면 다음
      *       제출이 거부되기 때문이다.
      * @note 최소화처럼 그릴 영역이 없으면 swapchain이 바뀌지 않는다. 그래도 레인은
      *       새로 만든다 — 이전 상태를 물려받지 않는 편이 단순하다.
      */
-    void recreate();
+    void recreate(rhi::Extent2D extent);
 
     /**
      * @brief 지연 파괴 목록을 반환한다. renderer가 리소스를 맡길 때 쓴다.

@@ -27,6 +27,13 @@ struct SwapchainDesc {
 
     /// @brief 화면에 제시하는 방식. 기본값이 Fifo이다.
     PresentMode presentMode = PresentMode::Fifo;
+
+    /// @brief surface가 extent를 정하지 않을 때 쓸 창의 픽셀 크기이다.
+    ///
+    /// Win32처럼 currentExtent에 창 크기를 채워 주는 surface에서는 무시된다.
+    /// Wayland는 currentExtent를 미지정(0xFFFFFFFF)으로 두므로, 이 값을
+    /// minImageExtent·maxImageExtent 안으로 제한해 쓴다.
+    Extent2D extent{};
 };
 
 /**
@@ -123,17 +130,21 @@ public:
     virtual Extent2D extent() const noexcept = 0;
 
     /**
-     * @brief 현재 Surface 크기로 swapchain과 image view들을 다시 만든다.
+     * @brief 창 크기에 맞춰 swapchain과 image view들을 다시 만든다.
      *
      * 창 크기가 바뀌면 swapchain이 무효가 된다. 호출 전에 device.waitIdle()로
      * present까지 끝내야 한다 — fence만 기다리면 submit은 끝나도 present가 큐에 남아
      * swapchain을 붙잡고 있을 수 있다 (frame.md §6, §9).
      *
-     * @note 크기를 인자로 받지 않는 이유는 Surface의 capabilities(currentExtent)가
-     *       이미 창 크기를 알려 주기 때문이다. 크기를 넘기면 호출자마다 창 크기와
-     *       swapchain 크기가 어긋날 수 있다.
+     * @param[in] extent 최신 창의 픽셀 크기. surface가 currentExtent를 채워 주면
+     *                   (Win32) 무시되고, 미지정이면 (Wayland) 이 값을 min/max로
+     *                   제한해 쓴다.
+     *
+     * @note 크기를 인자로 받는 이유는 Wayland처럼 surface가 창 크기를 알려 주지 않는
+     *       경우가 있기 때문이다. 크기를 넘기지 않으면 호출자마다 창 크기와 swapchain
+     *       크기가 어긋날 수 있다.
      */
-    virtual void recreate() = 0;
+    virtual void recreate(Extent2D extent) = 0;
 };
 
 } // namespace nxt::graphics::rhi

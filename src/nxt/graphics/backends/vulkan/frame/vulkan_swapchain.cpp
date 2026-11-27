@@ -127,23 +127,33 @@ vk::CompositeAlphaFlagBitsKHR chooseCompositeAlpha(vk::CompositeAlphaFlagsKHR su
  *
  * Win32는 currentExtent에 창의 실제 크기를 넣어 준다. 최소화 상태에서는 0x0이며,
  * 이때는 swapchain을 만들 수 없으므로 0을 그대로 돌려주고 호출자가 판단한다.
+ * Wayland는 currentExtent를 미지정(0xFFFFFFFF)으로 두므로, 창이 알려 준 크기를
+ * minImageExtent·maxImageExtent 안으로 제한해 쓴다.
  *
  * @param[in] capabilities surface의 제약.
+ * @param[in] requested surface가 크기를 정하지 않을 때 쓸 창 크기.
  * @return 이미지 크기. 창에 그릴 영역이 없으면 0x0.
  */
 [[nodiscard]]
-rhi::Extent2D surfaceExtent(const vk::SurfaceCapabilitiesKHR& capabilities) {
+rhi::Extent2D surfaceExtent(const vk::SurfaceCapabilitiesKHR& capabilities, const rhi::Extent2D requested) {
     constexpr std::uint32_t kUndefinedExtent = std::numeric_limits<std::uint32_t>::max();
 
-    if (capabilities.currentExtent.width == kUndefinedExtent) {
-        // surface가 크기를 정하지 않는다 (X11 등). SwapchainDesc에 크기가 없으므로 채울
-        // 값이 없다 - Linux 백엔드가 붙을 때 desc에 창 크기를 넣는다.
-        ::nxt::core::diag::reportAssertFailure({"extent",
-                                                "surface가 extent를 정하지 않는다. SwapchainDesc에 크기가 필요하다.",
-                                                __FILE__, __func__, __LINE__});
+    if (capabilities.currentExtent.width != kUndefinedExtent) {
+        return {capabilities.currentExtent.width, capabilities.currentExtent.height};
     }
 
-    return {capabilities.currentExtent.width, capabilities.currentExtent.height};
+    // surface가 크기를 정하지 않는다. 창 크기가 0이면 그릴 영역이 없다는 뜻이다.
+    if ((requested.width == 0) || (requested.height == 0)) {
+        return {};
+    }
+
+    // Vulkan은 이 범위를 벗어난 extent를 거부한다. 창이 범위 밖이면 가장 가까운 값으로 자른다.
+    const auto clampExtent = [](const std::uint32_t value, const std::uint32_t low, const std::uint32_t high) {
+        return std::min(std::max(value, low), high);
+    };
+
+    return {clampExtent(requested.width, capabilities.minImageExtent.width, capabilities.maxImageExtent.width),
+            clampExtent(requested.height, capabilities.minImageExtent.height, capabilities.maxImageExtent.height)};
 }
 
 } // namespace
@@ -154,11 +164,12 @@ std::unique_ptr<VulkanSwapchain> VulkanSwapchain::create(const VulkanDevice& dev
     const vk::SurfaceKHR surface = toVkHandle<vk::SurfaceKHR>(desc.surface);
 
     // make_unique는 private 생성자를 못 부른다. 여기서만 new를 쓴다 (VulkanDevice와 같은 이유).
-    return std::unique_ptr<VulkanSwapchain>(new VulkanSwapchain(device, surface, desc.presentMode));
+    return std::unique_ptr<VulkanSwapchain>(new VulkanSwapchain(device, surface, desc.presentMode, desc.extent));
 }
 
-VulkanSwapchain::VulkanSwapchain(const VulkanDevice& device, vk::SurfaceKHR surface, rhi::PresentMode presentMode)
-    : device_{device}, surface_{surface}, presentMode_{presentMode} {
+VulkanSwapchain::VulkanSwapchain(const VulkanDevice& device, vk::SurfaceKHR surface, rhi::PresentMode presentMode,
+                                 const rhi::Extent2D extent)
+    : device_{device}, surface_{surface}, presentMode_{presentMode}, requestedExtent_{extent} {
     if (!createSwapchain(vk::SwapchainKHR{})) {
         ::nxt::core::diag::reportAssertFailure(
             {"swapchain", "창에 그릴 영역이 없어 swapchain을 만들 수 없다.", __FILE__, __func__, __LINE__});
@@ -181,7 +192,7 @@ bool VulkanSwapchain::createSwapchain(vk::SwapchainKHR oldSwapchain) {
     const vk::SurfaceCapabilitiesKHR capabilities = capabilitiesResult.value;
 
     // 크기를 먼저 본다. 여기서 돌아가면 아무것도 바꾸지 않으므로 old swapchain이 살아남는다.
-    const rhi::Extent2D extent = surfaceExtent(capabilities);
+    const rhi::Extent2D extent = surfaceExtent(capabilities, requestedExtent_);
     if ((extent.width == 0) || (extent.height == 0)) {
         return false;
     }
@@ -312,9 +323,12 @@ rhi::Extent2D VulkanSwapchain::extent() const noexcept {
     return extent_;
 }
 
-void VulkanSwapchain::recreate() {
+void VulkanSwapchain::recreate(const rhi::Extent2D extent) {
     // 호출자는 in-flight fence를 먼저 기다린다 (frame.md §6). swapchain은 프레임 수명을
     // 모르므로 여기서 기다리지 않는다.
+    // Wayland처럼 surface가 extent를 정하지 않는 경우를 위해 최신 창 크기를 기억한다.
+    requestedExtent_ = extent;
+
     const vk::SwapchainKHR oldSwapchain = swapchain_;
 
     if (!createSwapchain(oldSwapchain)) {
