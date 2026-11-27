@@ -57,6 +57,22 @@
                 "CMAKE_CXX_STANDARD": "20",
                 "CMAKE_CXX_STANDARD_REQUIRED": "ON",
                 "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+                "CMAKE_BUILD_TYPE": "Debug",
+                "NXT_BUILD_TESTS": "ON"
+            }
+        },
+        {
+            "name": "gcc-release",
+            "displayName": "GCC RelWithDebInfo (Linux)",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build/gcc-release",
+            "cacheVariables": {
+                "CMAKE_C_COMPILER": "gcc",
+                "CMAKE_CXX_COMPILER": "g++",
+                "CMAKE_CXX_STANDARD": "20",
+                "CMAKE_CXX_STANDARD_REQUIRED": "ON",
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+                "CMAKE_BUILD_TYPE": "RelWithDebInfo",
                 "NXT_BUILD_TESTS": "ON"
             }
         },
@@ -114,8 +130,8 @@
         },
         {
             "name": "gcc-release",
-            "displayName": "GCC Release (Linux)",
-            "configurePreset": "gcc"
+            "displayName": "GCC RelWithDebInfo (Linux)",
+            "configurePreset": "gcc-release"
         },
         {
             "name": "gcc-bench",
