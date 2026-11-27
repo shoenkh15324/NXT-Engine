@@ -38,8 +38,10 @@ Engine::Engine(const EngineDesc& desc, std::unique_ptr<platform::window::Window>
     instance_ = rhi::Instance::create(rhi::InstanceDesc{.appName = desc.appName});
     surface_ = instance_->createSurface(window_->native());
     device_ = instance_->createDevice(rhi::DeviceDesc{.surface = surface_});
-    swapchain_ =
-        rhi::Swapchain::create(*device_, rhi::SwapchainDesc{.surface = surface_, .presentMode = desc.presentMode});
+    swapchain_ = rhi::Swapchain::create(
+        *device_, rhi::SwapchainDesc{.surface = surface_,
+                                     .presentMode = desc.presentMode,
+                                     .extent = rhi::Extent2D{window_->width(), window_->height()}});
 
     // 파이프라인이 두 부착물의 형식을 알아야 하므로 swapchain 뒤에 만든다. 깊이 형식은
     // 프레임 루프가 이미지를 만들 때 쓰는 값과 같아야 한다.
@@ -151,23 +153,24 @@ bool Engine::pumpFrame() {
     }
 
     // 최소화. 그릴 영역이 없어 acquire가 계속 실패하므로 프레임을 부르지 않는다.
-    // pollEvents는 PeekMessage라 여기서 쉬지 않으면 CPU를 100% 쓴다.
+    // pollEvents는 이벤트를 기다리지 않고 즉시 돌아오므로, 여기서 쉬지 않으면 CPU를 100% 쓴다.
     if ((window_->width() == 0) || (window_->height() == 0)) {
         std::this_thread::sleep_for(std::chrono::milliseconds(16));
         return true;
     }
 
     // 창 크기와 swapchain 크기가 다르면 낡은 것이다. fence 대기는 recreate가 한다.
+    const rhi::Extent2D windowExtent{window_->width(), window_->height()};
     const rhi::Extent2D extent = swapchain_->extent();
-    if ((window_->width() != extent.width) || (window_->height() != extent.height)) {
-        frameLoop_->recreate();
+    if ((windowExtent.width != extent.width) || (windowExtent.height != extent.height)) {
+        frameLoop_->recreate(windowExtent);
     }
 
     // acquire/present가 out-of-date를 돌려주는 경우. 루프는 스스로 고치지 않고
     // 여기서 recreate를 부른다 (frame.md §6).
     if (frameLoop_->frame() == FrameLoop::Status::OutOfDate) {
         NXT_LOG_INFO(Engine, FrameLoop, "swapchain out of date: recreating");
-        frameLoop_->recreate();
+        frameLoop_->recreate(windowExtent);
     }
 
     return true;

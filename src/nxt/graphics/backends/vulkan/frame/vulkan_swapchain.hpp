@@ -60,7 +60,7 @@ public:
     [[nodiscard]]
     rhi::Extent2D extent() const noexcept override;
 
-    void recreate() override;
+    void recreate(rhi::Extent2D extent) override;
 
 private:
     /**
@@ -69,8 +69,10 @@ private:
      * @param[in] device      swapchain을 만들 디바이스.
      * @param[in] surface     제시할 대상.
      * @param[in] presentMode 요청할 present 방식.
+     * @param[in] extent      surface가 extent를 정하지 않을 때 쓸 창 크기.
      */
-    VulkanSwapchain(const VulkanDevice& device, vk::SurfaceKHR surface, rhi::PresentMode presentMode);
+    VulkanSwapchain(const VulkanDevice& device, vk::SurfaceKHR surface, rhi::PresentMode presentMode,
+                    rhi::Extent2D extent);
 
     /**
      * @brief surface에 맞춰 swapchain과 image view를 (다시) 만든다.
@@ -93,6 +95,9 @@ private:
 
     /// @brief 요청한 present 방식. recreate()할 때 지원 여부를 다시 확인한다.
     rhi::PresentMode presentMode_{rhi::PresentMode::Fifo};
+
+    /// @brief surface가 extent를 정하지 않을 때 쓸 창 크기다. recreate()가 갱신한다.
+    rhi::Extent2D requestedExtent_{};
 
     /// @brief Vulkan swapchain. 소멸자와 recreate()가 파괴한다.
     vk::SwapchainKHR swapchain_{};

@@ -127,7 +127,7 @@ FrameLoop::Status FrameLoop::frame() {
     return Status::Presented;
 }
 
-void FrameLoop::recreate() {
+void FrameLoop::recreate(const rhi::Extent2D extent) {
     // frame.md §6: in-flight fence를 모두 기다린다. 여기에 더해 device를 idle로 만든다 —
     // fence는 present 완료를 보장하지 않는데, present가 큐에 남은 채로 swapchain을
     // 파괴하면 VUID-vkDestroySwapchainKHR-swapchain-01282가 난다. 리사이즈는 드물어서
@@ -143,7 +143,7 @@ void FrameLoop::recreate() {
     // 깊이 이미지도 이전 크기에 묶여 있다. 새 extent로 다시 만들기 전에 버린다.
     destroyDepthTarget();
 
-    swapchain_.recreate();
+    swapchain_.recreate(extent);
 
     createDepthTarget();
 
