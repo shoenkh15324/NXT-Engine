@@ -129,6 +129,10 @@ RHI에 Vulkan 확장 이름을 노출하지 않고 플랫폼 종류만 전달한
 - pending 이벤트 처리·flush·읽기 준비를 조합해 이벤트 루프를 구성하고 메인 프레임을 무기한 대기시키지 않는다.
 - close 요청과 연결 오류를 처리하고 Surface → Wayland 객체 → display 연결 순으로 정리한다.
 - Wayland는 최소화 여부를 Win32와 같은 방식으로 알려준다고 가정하지 않는다. 사용 가능한 상태 정보에 맞춰 정책을 둔다.
+- xdg-shell은 서버 측 장식을 제공하지 않는다. 창 테두리는 libdecor가 그린다.
+  빌드 의존성은 `libdecor-0`(pkg-config)이고, 장식은 런타임 플러그인(`libdecor-0-plugin-1-cairo` 또는 `-gtk`)이 담당한다.
+- libdecor를 만들 수 없으면 경고를 남기고 장식 없는 xdg-shell 경로로 계속 동작한다(런타임 폴백).
+  libdecor가 표면에 xdg 역할을 붙인 뒤 실패하면 폴백할 수 없으므로 그때는 창 생성을 실패로 처리한다.
 
 ### L2-3 Swapchain과 extent (완료)
 
@@ -323,6 +327,7 @@ L4에서 새 검증 기록을 만들고 실행 명령·결과·제한을 정리�
 | 환경 | WSL2 + WSLg. `WAYLAND_DISPLAY=wayland-0`(WSLg 런타임 디렉터리 심볼릭 링크) |
 | 빌드 도구 | GCC 13.3.0, CMake 3.28.3, Ninja, `-Wall -Wextra` |
 | Wayland | wayland-client 1.22.0, wayland-protocols 1.45, `/usr/bin/wayland-scanner` |
+| 창 장식 | libdecor 0.2.2, 플러그인 `libdecor-0-plugin-1-cairo` · `-gtk` |
 | Vulkan | 헤더·런타임 1.3.275, ICD `dzn`(D3D12) · `lavapipe` |
 | 생성물 | `<build>/src/nxt/platform/wayland-generated/xdg-shell-{client-protocol.h,protocol.c}` |
 
@@ -334,6 +339,8 @@ L4에서 새 검증 기록을 만들고 실행 명령·결과·제한을 정리�
 - Wayland 창: 최초 configure 1280x720, `scale 1`, `VK_KHR_wayland_surface` 선택.
 - Swapchain: 이미지 4장, `B8G8R8A8Srgb`, `Fifo`, extent 1280x720.
 - 1000 오브젝트 실행: 약 59fps, validation ERROR/VUID 없음. 프레임 요약에 cpu/gpu/fence/draws가 나온다.
+- 창 장식: libdecor가 타이틀바(1280x37)와 그림자를 subsurface로 그린다. 창 전체는 1328x768이 된다.
+  libdecor를 강제로 끄면 경고를 남기고 무장식 xdg-shell 경로로 56fps 이상 동작한다.
 - 100000 오브젝트 실행: draws=65025, dzn(실제 GPU 경로)에서 초당 9프레임 수준, 디바이스 로스트 없음.
 - RelWithDebInfo + 100000 오브젝트: draws=65025, llvmpipe에서 약 12fps(소프트웨어 렌더러).
 
