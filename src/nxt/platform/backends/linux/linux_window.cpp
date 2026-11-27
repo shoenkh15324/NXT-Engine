@@ -6,7 +6,7 @@
 namespace nxt::platform::window {
 
 std::unique_ptr<Window> createWindow(const WindowDesc& desc) {
-    // 현재 Linux GUI 백엔드는 Wayland 하나다. --window-system 정책은 L3에서 붙인다.
+    // Linux GUI 백엔드는 Wayland 하나다. 창 시스템은 빌드 시 정해지고 실행 중에 고르지 않는다.
     auto window = wayland::WaylandWindow::create(desc);
     if (!window) {
         NXT_LOG_ERROR(Platform, Window, "wayland window creation failed");
