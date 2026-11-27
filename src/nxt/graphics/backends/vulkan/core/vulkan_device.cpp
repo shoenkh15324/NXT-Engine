@@ -49,9 +49,20 @@ DeviceSelection selectDevice(vk::Instance instance, vk::SurfaceKHR surface) {
                 continue;
             }
 
-            const auto support = device.getSurfaceSupportKHR(index, surface);
-            VK_CHECK(support.result);
-            if (!support.value) {
+            // Vulkan-Hpp의 enhanced 호출(getSurfaceSupportKHR)은 실패 결과를 assert로
+            // 끝낸다. WSL의 dzn처럼 conformant가 아닌 드라이버는 이 질의 자체를 오류로
+            // 돌려주므로, 원시 호출로 결과를 받아 "이 디바이스로는 present할 수 없다"로
+            // 처리하고 다음 후보로 넘어간다. 비 conformant 드라이버 하나 때문에 정상
+            // 디바이스까지 못 쓰게 되면 안 된다.
+            vk::Bool32 supported = VK_FALSE;
+            const VkResult supportResult = VULKAN_HPP_DEFAULT_DISPATCHER.vkGetPhysicalDeviceSurfaceSupportKHR(
+                device, index, surface, &supported);
+            if (supportResult != VK_SUCCESS) {
+                NXT_LOG_WARN(Graphics, Vulkan, "surface support query failed ({}); skipping device",
+                             vk::to_string(static_cast<vk::Result>(supportResult)));
+                continue;
+            }
+            if (supported == VK_FALSE) {
                 continue;
             }
 

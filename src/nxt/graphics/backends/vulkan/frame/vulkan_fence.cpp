@@ -36,7 +36,12 @@ void waitFence(const Device& device, const Fence& fence) {
     // timeout 인자를 두지 않는다 — 무한정 기다리는 쪽이 옳다고 가정한다 (frame.md §5).
     constexpr std::uint64_t kWaitForever = std::numeric_limits<std::uint64_t>::max();
     const vk::Fence vkFence = vulkan::toVkHandle<vk::Fence>(fence);
-    VK_CHECK(vulkan::toVulkanDevice(device).device().waitForFences(vkFence, vk::True, kWaitForever));
+
+    // 배열 오버로드(enhanced)는 실패 결과를 assert로 끝낸다. 디바이스 로스트는 이
+    // 대기에서 가장 먼저 드러나는데, assert 메시지에는 원인이 남지 않는다. 원시
+    // 오버로드로 결과를 받아 우리 로그에 원인을 남긴다 (rhi.md §7).
+    const vk::Fence fences[] = {vkFence};
+    VK_CHECK(vulkan::toVulkanDevice(device).device().waitForFences(1, fences, vk::True, kWaitForever));
 }
 
 void resetFence(const Device& device, const Fence& fence) {

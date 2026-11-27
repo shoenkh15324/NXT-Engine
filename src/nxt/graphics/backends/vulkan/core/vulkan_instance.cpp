@@ -40,25 +40,27 @@ std::uint32_t projectVersion() noexcept {
  * 검증 레이어 메시지를 별도 출력 경로로 보내지 않는다 (rhi.md §7). 레이어가
  * 꺼져 있는 A4에서는 아무 메시지도 오지 않고, A6에서 레이어를 켜면 살아난다.
  */
-VKAPI_ATTR vk::Bool32 VKAPI_CALL debugUtilsCallback(vk::DebugUtilsMessageSeverityFlagBitsEXT severity,
-                                                    vk::DebugUtilsMessageTypeFlagsEXT type,
-                                                    const vk::DebugUtilsMessengerCallbackDataEXT* callbackData,
-                                                    void* userData) noexcept {
+VKAPI_ATTR VkBool32 VKAPI_CALL debugUtilsCallback(VkDebugUtilsMessageSeverityFlagBitsEXT severity,
+                                                  VkDebugUtilsMessageTypeFlagsEXT type,
+                                                  const VkDebugUtilsMessengerCallbackDataEXT* callbackData,
+                                                  void* userData) noexcept {
     (void)type;
     (void)userData;
 
     // 심각도 비트는 값이 클수록 심각하다. (Verbose < Info < Warning < Error)
-    if (severity >= vk::DebugUtilsMessageSeverityFlagBitsEXT::eError) {
+    // PFN_vkDebugUtilsMessengerCallbackEXT는 C 타입을 요구하므로 vk:: enum이 아니라
+    // VkDebugUtils... 타입으로 받는다. 그래야 함수 포인터 변환이 성립한다.
+    if (severity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT) {
         NXT_LOG_ERROR(Graphics, Vulkan, "{}", callbackData->pMessage);
-    } else if (severity >= vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning) {
+    } else if (severity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) {
         NXT_LOG_WARN(Graphics, Vulkan, "{}", callbackData->pMessage);
-    } else if (severity >= vk::DebugUtilsMessageSeverityFlagBitsEXT::eInfo) {
+    } else if (severity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT) {
         NXT_LOG_INFO(Graphics, Vulkan, "{}", callbackData->pMessage);
     } else {
         NXT_LOG_TRACE(Graphics, Vulkan, "{}", callbackData->pMessage);
     }
 
-    return vk::False;
+    return VK_FALSE;
 }
 
 /**
@@ -163,7 +165,15 @@ std::unique_ptr<VulkanInstance> VulkanInstance::create(const rhi::InstanceDesc& 
     applicationInfo.applicationVersion = projectVersion();
     applicationInfo.pEngineName = NXT_PROJECT_NAME;
     applicationInfo.engineVersion = projectVersion();
+    // 이 프로젝트는 Vulkan 1.4를 기준으로 한다. 다만 배포판 패키지 헤더는 아직
+    // 1.3일 수 있으므로, 헤더가 아는 가장 높은 버전으로 낮춰서 요청한다.
+    // 엔진이 실제로 쓰는 기능은 1.3 범위 안이므로 동작에는 영향이 없다.
+#if defined(VK_API_VERSION_1_4)
     applicationInfo.apiVersion = vk::ApiVersion14;
+#else
+    applicationInfo.apiVersion = vk::ApiVersion13;
+    NXT_LOG_WARN(Graphics, Vulkan, "vulkan headers are older than 1.4; requesting API 1.3");
+#endif
 
     vk::InstanceCreateInfo createInfo{};
     createInfo.pApplicationInfo = &applicationInfo;
