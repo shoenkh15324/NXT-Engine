@@ -110,12 +110,13 @@ const char* platformSurfaceExtension() noexcept;
 /**
  * @brief 창의 원시 핸들로 이 플랫폼의 surface를 만든다.
  *
- * 구현은 vulkan_instance_<platform>.cpp에 있다. windows.h · xcb.h 같은 플랫폼
- * 헤더는 그 파일 안에만 들어오므로 vulkan_instance.cpp는 플랫폼을 알지 않는다.
+ * 구현은 vulkan_instance_<platform>.cpp에 있다. windows.h · wayland-client.h 같은
+ * 플랫폼 헤더는 그 파일 안에만 들어오므로 vulkan_instance.cpp는 플랫폼을 알지 않는다.
  *
  * @param[in] instance surface를 만들 vk::Instance.
  * @param[in] window 창의 원시 핸들. 플랫폼별 차이는 NativeWindow가 흡수한다
- *                   (window.hpp — Win32는 handle=HWND, X11은 display=xcb_connection_t*).
+ *                   (window.hpp — Win32는 handle=HWND, Wayland는 handle=wl_surface*,
+ *                   display=wl_display*).
  * @return 만들어진 surface.
  */
 [[nodiscard]]
