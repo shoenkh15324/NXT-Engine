@@ -16,6 +16,10 @@ if(UNIX AND NOT APPLE)
     pkg_check_modules(WAYLAND_CLIENT REQUIRED IMPORTED_TARGET wayland-client)
     pkg_check_modules(WAYLAND_PROTOCOLS REQUIRED wayland-protocols)
 
+    # xdg-shell은 서버 측 장식을 제공하지 않는다. libdecor가 창 테두리를 그리고,
+    # 쓸 수 없는 환경에서는 WaylandWindow가 장식 없이 동작한다.
+    pkg_check_modules(LIBDECOR REQUIRED IMPORTED_TARGET libdecor-0)
+
     # 배포판마다 경로가 다르므로 pkg-config가 알려 주는 pkgdatadir을 쓴다.
     pkg_get_variable(WAYLAND_PROTOCOLS_DATADIR wayland-protocols pkgdatadir)
     find_program(WAYLAND_SCANNER_EXECUTABLE NAMES wayland-scanner REQUIRED)
@@ -38,7 +42,7 @@ if(UNIX AND NOT APPLE)
     # 생성 헤더를 include할 수 있게 하고, 생성 C 소스를 nxt_platform에 넣는다.
     target_sources(nxt_platform PRIVATE "${XDG_SHELL_SOURCE}" "${XDG_SHELL_HEADER}")
     target_include_directories(nxt_platform PRIVATE "${WAYLAND_GENERATED_DIR}")
-    target_link_libraries(nxt_platform PRIVATE PkgConfig::WAYLAND_CLIENT)
+    target_link_libraries(nxt_platform PRIVATE PkgConfig::WAYLAND_CLIENT PkgConfig::LIBDECOR)
 endif()
 
 target_sources(nxt_platform

@@ -1,8 +1,10 @@
 #include <algorithm>
 #include <cerrno>
+#include <chrono>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <libdecor.h>
 #include <memory>
 #include <nxt/core/diagnostics/log.hpp>
 #include <nxt/platform/backends/linux/wayland/wayland_window.hpp>
@@ -13,7 +15,8 @@
 #include <wayland-client.h>
 
 // wayland-scanner가 빌드 디렉터리에 생성한다 (platform/CMakeLists.txt).
-// 소스가 아니라 생성물이므로 저장소에 커밋하지 않는다.
+// 소스가 아니라 생성물이므로 저장소에 커밋하지 않는다. libdecor를 쓸 수 없는
+// 환경에서만 xdg-shell을 직접 쓴다.
 #include "xdg-shell-client-protocol.h"
 
 namespace nxt::platform::wayland {
@@ -29,6 +32,12 @@ constexpr std::uint32_t kFallbackHeight = 720;
 
 /// @brief 첫 configure를 기다릴 때 허용하는 roundtrip 횟수이다.
 constexpr int kInitialConfigureRoundtrips = 3;
+
+/// @brief libdecor 첫 configure를 기다리는 최대 시간이다.
+constexpr auto kDecorConfigureTimeout = std::chrono::seconds(2);
+
+/// @brief libdecor_dispatch 한 번에 기다리는 시간이다. 이벤트가 없으면 곧 돌아온다.
+constexpr int kDecorDispatchSliceMs = 50;
 
 /// @brief wl_output.scale을 받기 위해 바인딩하는 최대 버전이다.
 constexpr std::uint32_t kMaxOutputVersion = 2;
@@ -66,6 +75,12 @@ struct WaylandCallbacks {
     static void outputMode(void* data, wl_output* output, std::uint32_t flags, std::int32_t width, std::int32_t height,
                            std::int32_t refresh);
     static void outputDone(void* data, wl_output* output);
+
+    // libdecor 경로의 콜백이다. libdecor가 xdg_surface/xdg_toplevel을 소유한다.
+    static void decorError(libdecor* context, libdecor_error error, const char* message);
+    static void frameConfigure(libdecor_frame* frame, libdecor_configuration* configuration, void* data);
+    static void frameClose(libdecor_frame* frame, void* data);
+    static void frameCommit(libdecor_frame* frame, void* data);
 };
 
 namespace {
@@ -108,6 +123,22 @@ const wl_output_listener kOutputListener = [] {
     return listener;
 }();
 
+// libdecor 인터페이스도 reserved 필드가 있어 0으로 초기화한 뒤 채운다.
+// libdecor API가 const 포인터를 받지 않으므로 상수로 두지 않는다.
+libdecor_interface kDecorInterface = [] {
+    libdecor_interface iface{};
+    iface.error = &WaylandCallbacks::decorError;
+    return iface;
+}();
+
+libdecor_frame_interface kFrameInterface = [] {
+    libdecor_frame_interface iface{};
+    iface.configure = &WaylandCallbacks::frameConfigure;
+    iface.close = &WaylandCallbacks::frameClose;
+    iface.commit = &WaylandCallbacks::frameCommit;
+    return iface;
+}();
+
 } // namespace
 
 std::unique_ptr<WaylandWindow> WaylandWindow::create(const WindowDesc& desc) {
@@ -143,16 +174,15 @@ bool WaylandWindow::initialize(const WindowDesc& desc) {
     }
     wl_registry_add_listener(registry_, &kRegistryListener, this);
 
-    // 첫 roundtrip에서 compositor와 xdg_wm_base를 바인딩한다. 이 둘이 없으면
-    // xdg-shell 창을 만들 수 없다.
+    // 첫 roundtrip에서 compositor와 xdg_wm_base를 바인딩한다. compositor가 없으면
+    // 표면을 만들 수 없다. xdg_wm_base는 장식 없는 폴백 경로에서만 쓴다.
     if (wl_display_roundtrip(display_) < 0) {
         NXT_LOG_ERROR(Platform, Window, "wayland roundtrip failed while binding globals");
         return false;
     }
 
-    if ((compositor_ == nullptr) || (wmBase_ == nullptr)) {
-        NXT_LOG_ERROR(Platform, Window, "required wayland globals are missing: compositor={} xdg_wm_base={}",
-                      (compositor_ != nullptr), (wmBase_ != nullptr));
+    if (compositor_ == nullptr) {
+        NXT_LOG_ERROR(Platform, Window, "required wayland global is missing: compositor");
         return false;
     }
 
@@ -162,6 +192,82 @@ bool WaylandWindow::initialize(const WindowDesc& desc) {
         return false;
     }
     wl_surface_add_listener(surface_, &kSurfaceListener, this);
+
+    // 장식이 있는 창이 기본이다. libdecor를 쓸 수 없는 환경에서는 장식 없이 계속한다.
+    if (initializeDecorated()) {
+        NXT_LOG_INFO(Platform, Window, "wayland window ready: {}x{} (logical {}x{}, scale {}, libdecor)", width(),
+                     height(), logicalWidth_, logicalHeight_, scale_);
+        return true;
+    }
+
+    // libdecor가 표면에 xdg 역할을 붙인 뒤(map) 실패하면 무장식으로 되돌릴 수 없다.
+    // 역할을 붙이기 전에 실패한 경우에만 폴백한다.
+    if (frame_ != nullptr) {
+        return false;
+    }
+
+    NXT_LOG_WARN(Platform, Window, "libdecor unavailable; continuing without window decorations");
+    if (!initializeUndecorated()) {
+        return false;
+    }
+
+    NXT_LOG_INFO(Platform, Window, "wayland window ready: {}x{} (logical {}x{}, scale {}, xdg-shell)", width(),
+                 height(), logicalWidth_, logicalHeight_, scale_);
+    return true;
+}
+
+bool WaylandWindow::initializeDecorated() {
+    decor_ = libdecor_new(display_, &kDecorInterface);
+    if (decor_ == nullptr) {
+        return false;
+    }
+
+    frame_ = libdecor_decorate(decor_, surface_, &kFrameInterface, this);
+    if (frame_ == nullptr) {
+        NXT_LOG_WARN(Platform, Window, "libdecor_decorate failed");
+        libdecor_unref(decor_);
+        decor_ = nullptr;
+        return false;
+    }
+
+    libdecor_frame_set_title(frame_, title_.c_str());
+    libdecor_frame_set_app_id(frame_, "nxt.sandbox");
+
+    // map이 첫 wl_surface commit까지 한다. 이 commit 뒤에 configure가 온다.
+    // 여기서부터 표면은 xdg_toplevel 역할을 가지므로 무장식으로 폴백할 수 없다.
+    libdecor_frame_map(frame_);
+
+    // configure와 ack는 libdecor가 처리하고 frameConfigure 콜백으로 크기만 받는다.
+    const auto deadline = std::chrono::steady_clock::now() + kDecorConfigureTimeout;
+    while (!configured_ && !closed_ && (std::chrono::steady_clock::now() < deadline)) {
+        if (libdecor_dispatch(decor_, kDecorDispatchSliceMs) < 0) {
+            NXT_LOG_ERROR(Platform, Window, "libdecor dispatch failed while waiting for initial configure");
+            return false;
+        }
+        // libdecor는 자기 큐만 디스패치한다. 우리 큐(출력·registry)도 처리한다.
+        if (wl_display_dispatch_pending(display_) < 0) {
+            NXT_LOG_ERROR(Platform, Window, "wayland dispatch_pending failed while waiting for initial configure");
+            return false;
+        }
+    }
+
+    if (closed_) {
+        NXT_LOG_ERROR(Platform, Window, "wayland window closed before initial configure");
+        return false;
+    }
+    if (!configured_) {
+        NXT_LOG_ERROR(Platform, Window, "libdecor initial configure was not received");
+        return false;
+    }
+
+    return true;
+}
+
+bool WaylandWindow::initializeUndecorated() {
+    if (wmBase_ == nullptr) {
+        NXT_LOG_ERROR(Platform, Window, "xdg_wm_base is missing; cannot create an undecorated window");
+        return false;
+    }
 
     xdgSurface_ = xdg_wm_base_get_xdg_surface(wmBase_, surface_);
     if (xdgSurface_ == nullptr) {
@@ -198,8 +304,6 @@ bool WaylandWindow::initialize(const WindowDesc& desc) {
         return false;
     }
 
-    NXT_LOG_INFO(Platform, Window, "wayland window ready: {}x{} (logical {}x{}, scale {})", width(), height(),
-                 logicalWidth_, logicalHeight_, scale_);
     return true;
 }
 
@@ -225,6 +329,24 @@ bool WaylandWindow::isOpen() const noexcept {
 
 void WaylandWindow::pollEvents() {
     if ((display_ == nullptr) || closed_) {
+        return;
+    }
+
+    if (decor_ != nullptr) {
+        // libdecor가 소켓을 읽고 자기 큐를 디스패치한다. timeout 0이라 프레임을 막지 않는다.
+        // 우리가 wl_display_prepare_read를 잡으면 libdecor와 충돌하므로 섞지 않는다.
+        if (libdecor_dispatch(decor_, 0) < 0) {
+            NXT_LOG_ERROR(Platform, Window, "libdecor dispatch failed");
+            closed_ = true;
+            return;
+        }
+
+        // libdecor는 자기 큐만 디스패치한다. default 큐의 이벤트(출력 scale,
+        // surface enter/leave, registry)는 여기서 처리한다.
+        if (wl_display_dispatch_pending(display_) < 0) {
+            NXT_LOG_ERROR(Platform, Window, "wayland dispatch_pending failed");
+            closed_ = true;
+        }
         return;
     }
 
@@ -294,6 +416,17 @@ void WaylandWindow::destroyWaylandObjects() noexcept {
     }
     outputs_.clear();
     currentOutput_ = nullptr;
+
+    // libdecor가 xdg_surface/toplevel과 장식 subsurface를 소유한다. wl_surface보다
+    // 먼저 정리해야 한다.
+    if (frame_ != nullptr) {
+        libdecor_frame_unref(frame_);
+        frame_ = nullptr;
+    }
+    if (decor_ != nullptr) {
+        libdecor_unref(decor_);
+        decor_ = nullptr;
+    }
 
     if (toplevel_ != nullptr) {
         xdg_toplevel_destroy(toplevel_);
@@ -473,5 +606,57 @@ void WaylandCallbacks::outputGeometry(void*, wl_output*, std::int32_t, std::int3
 void WaylandCallbacks::outputMode(void*, wl_output*, std::uint32_t, std::int32_t, std::int32_t, std::int32_t) {}
 
 void WaylandCallbacks::outputDone(void*, wl_output*) {}
+
+// ---- libdecor ----
+
+void WaylandCallbacks::decorError(libdecor*, libdecor_error error, const char* message) {
+    // 창을 계속 쓸 수 있는 오류도 있으므로 닫지 않고 원인만 남긴다.
+    NXT_LOG_ERROR(Platform, Window, "libdecor error {}: {}", static_cast<int>(error),
+                  (message != nullptr) ? message : "(no message)");
+}
+
+void WaylandCallbacks::frameConfigure(libdecor_frame* frame, libdecor_configuration* configuration, void* data) {
+    auto* self = static_cast<WaylandWindow*>(data);
+
+    int width = 0;
+    int height = 0;
+    // 크기가 없는 configure(최소화 등)는 이전 논리 크기를 유지한다.
+    if (!libdecor_configuration_get_content_size(configuration, frame, &width, &height)) {
+        width = static_cast<int>(self->logicalWidth_);
+        height = static_cast<int>(self->logicalHeight_);
+    }
+    // 0은 "클라이언트가 정한다"는 뜻이다. 최소화로 해석하지 않고 이전 크기를 유지한다.
+    if (width <= 0) {
+        width = static_cast<int>(self->logicalWidth_);
+    }
+    if (height <= 0) {
+        height = static_cast<int>(self->logicalHeight_);
+    }
+
+    // content 크기는 장식을 뺀 표면 크기다. Vulkan이 그리는 영역과 같으므로 그대로 쓴다.
+    // commit이 configure ack를 겸한다. 이걸 빠뜨리면 buffer를 붙일 수 없다.
+    libdecor_state* state = libdecor_state_new(width, height);
+    libdecor_frame_commit(frame, state, configuration);
+    libdecor_state_free(state);
+
+    self->logicalWidth_ = static_cast<std::uint32_t>(width);
+    self->logicalHeight_ = static_cast<std::uint32_t>(height);
+    self->configured_ = true;
+
+    NXT_LOG_DEBUG(Platform, Window, "libdecor configure: {}x{} content", width, height);
+}
+
+void WaylandCallbacks::frameClose(libdecor_frame*, void* data) {
+    auto* self = static_cast<WaylandWindow*>(data);
+    self->closed_ = true;
+    NXT_LOG_INFO(Platform, Window, "wayland close requested");
+}
+
+void WaylandCallbacks::frameCommit(libdecor_frame*, void* data) {
+    // 동기 subsurface로 장식을 그리는 플러그인은 메인 표면 commit을 요구한다.
+    // buffer를 새로 붙이지 않는 commit이라 표면 상태만 갱신된다.
+    auto* self = static_cast<WaylandWindow*>(data);
+    wl_surface_commit(self->surface_);
+}
 
 } // namespace nxt::platform::wayland
