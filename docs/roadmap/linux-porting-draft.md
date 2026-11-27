@@ -357,6 +357,7 @@ L4에서 새 검증 기록을 만들고 실행 명령·결과·제한을 정리�
 그래서 깊이 형식을 `D32SFloatS8Uint`로 고정했다(`FrameLoop::kDepthFormat`). 깊이 정밀도는
 32비트로 같고 스텐실은 아직 쓰지 않는다. 위 실행 결과는 dzn에서 얻었으며 lavapipe로도 같은
 동작을 확인했다. 깊이 전용 `D32_SFLOAT`를 계속 쓰려면 이 드라이버가 고쳐져야 한다.
+분석 과정과 최소 재현은 [issues/0001-dzn-d32-sfloat-depth-clear.md](../issues/0001-dzn-d32-sfloat-depth-clear.md)에 정리했다.
 
 ```bash
 # WSLg 기본 경로 (dzn)
