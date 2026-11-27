@@ -21,3 +21,10 @@
 - [roadmap/phase0.md](roadmap/phase0.md) — 삼각형
 - [roadmap/phase1.md](roadmap/phase1.md) — 10만 삼각형, CPU 런타임
 - [roadmap/phase2.md](roadmap/phase2.md) — 실제 데이터 (glTF)
+
+## 이슈
+
+환경이나 드라이버 때문에 생긴 문제를 원인·재현·회피와 함께 남긴다.
+
+- [issues/0001-dzn-d32-sfloat-depth-clear.md](issues/0001-dzn-d32-sfloat-depth-clear.md)
+  — WSLg `dzn`이 `D32_SFLOAT` 깊이 clear에서 디바이스를 잃는 문제
