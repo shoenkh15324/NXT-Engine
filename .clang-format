@@ -47,8 +47,7 @@ DerivePointerAlignment: false
 # ============================================================
 
 # Include 순서 및 그룹을 자동 정리
-SortIncludes:
-  Enabled: true
+SortIncludes: CaseSensitive
 IncludeBlocks: Regroup
 
 # ============================================================
