@@ -176,6 +176,8 @@ std::string_view toString(const LogSubsystem subsystem) noexcept {
             return "Filesystem";
         case LogSubsystem::Win32:
             return "Win32";
+        case LogSubsystem::Linux:
+            return "Linux";
         case LogSubsystem::Rhi:
             return "Rhi";
         case LogSubsystem::Vulkan:

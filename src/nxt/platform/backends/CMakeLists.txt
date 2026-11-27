@@ -29,4 +29,21 @@ if(WIN32)
                 windows/win32_input.hpp
                 windows/win32_window.hpp
     )
+elseif(UNIX AND NOT APPLE)
+    target_sources(nxt_platform
+        PRIVATE
+            linux/log_sink/posix_console_log_sink.cpp
+            linux/log_sink/posix_file_log_sink.cpp
+    )
+
+    # 이 백엔드의 헤더는 공개 계약이 아니므로 별도 FILE_SET으로 등록한다.
+    # BASE_DIRS가 src이므로 여기서는 linux/ 경로가 앞에 붙는다.
+    target_sources(nxt_platform
+        PRIVATE
+            FILE_SET backend_headers TYPE HEADERS
+            BASE_DIRS "${PROJECT_SOURCE_DIR}/src"
+            FILES
+                linux/log_sink/posix_console_log_sink.hpp
+                linux/log_sink/posix_file_log_sink.hpp
+    )
 endif()

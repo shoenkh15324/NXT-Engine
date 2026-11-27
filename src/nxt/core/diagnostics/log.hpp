@@ -70,6 +70,7 @@ enum class LogSubsystem : std::uint8_t {
     Input,
     Filesystem,
     Win32,
+    Linux,
     // graphics
     Rhi,
     Vulkan,
