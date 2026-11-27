@@ -9,13 +9,35 @@
 #include <nxt/engine/engine.hpp>
 #include <nxt/math/aabb.hpp>
 #include <nxt/math/mat4.hpp>
-#include <nxt/platform/backends/windows/log_sink/win32_console_log_sink.hpp>
-#include <nxt/platform/backends/windows/log_sink/win32_file_log_sink.hpp>
 #include <nxt/renderer/world/world.hpp>
 #include <optional>
 #include <string_view>
 #include <system_error>
 #include <vector>
+
+// 로그 sink는 OS마다 다르다. Sandbox는 어느 OS에서 빌드해도 같은 코드를 쓰고,
+// 실제 sink 타입만 여기서 고른다.
+#if defined(_WIN32)
+    #include <nxt/platform/backends/windows/log_sink/win32_console_log_sink.hpp>
+    #include <nxt/platform/backends/windows/log_sink/win32_file_log_sink.hpp>
+namespace app_log = ::nxt::platform::win32::log;
+using ConsoleLogSink = app_log::Win32ConsoleLogSink;
+using FileLogSink = app_log::Win32FileLogSink;
+#elif defined(__linux__)
+    #include <nxt/platform/backends/linux/log_sink/posix_console_log_sink.hpp>
+    #include <nxt/platform/backends/linux/log_sink/posix_file_log_sink.hpp>
+namespace app_log = ::nxt::platform::posix::log;
+using ConsoleLogSink = app_log::PosixConsoleLogSink;
+using FileLogSink = app_log::PosixFileLogSink;
+#else
+    #error "sandbox: no log sink for this platform"
+#endif
+
+// CMake가 Debug/Release 등을 알려 주지 않으면(단일 구성 제너레이터에서
+// CMAKE_BUILD_TYPE이 비어 있는 경우) 배너가 컴파일되지 않으므로 기본값을 둔다.
+#ifndef NXT_BUILD_TYPE
+    #define NXT_BUILD_TYPE "Unspecified"
+#endif
 
 namespace {
 
@@ -288,8 +310,8 @@ int main(int argc, char* argv[]) {
     printBanner();
 
     // 터미널과 파일에 동시에 기록한다. 둘 다 같은 레코드를 받는다.
-    nxt::platform::win32::log::Win32ConsoleLogSink consoleSink;
-    nxt::platform::win32::log::Win32FileLogSink fileSink(nxt::platform::win32::log::Win32FileLogSink::defaultPath());
+    ConsoleLogSink consoleSink;
+    FileLogSink fileSink(FileLogSink::defaultPath());
 
     nxt::core::log::LogSink* sinks[] = {&consoleSink, &fileSink};
     nxt::core::log::LogManager manager(sinks);
