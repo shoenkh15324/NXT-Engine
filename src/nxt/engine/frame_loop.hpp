@@ -79,7 +79,12 @@ public:
     ///
     /// FrameTarget.depthFormat과 renderer의 파이프라인이 같은 값을 써야 한다.
     /// 그래서 한 곳에서만 정하고 밖에서도 읽을 수 있게 공개한다.
-    static constexpr rhi::Format kDepthFormat = rhi::Format::D32SFloat;
+    ///
+    /// 깊이 전용 D32_SFLOAT 대신 D32_SFLOAT_S8_UINT를 쓴다. 스텐실은 아직 쓰지 않지만,
+    /// WSLg의 Vulkan-on-D3D12 드라이버(dzn)가 D32_SFLOAT 깊이 부착물을 render pass에서
+    /// clear할 때 GPU를 멈춘다(디바이스 로스트). 같은 32비트 깊이 정밀도를 유지하면서
+    /// 그 경로를 피하려면 이 형식이어야 한다.
+    static constexpr rhi::Format kDepthFormat = rhi::Format::D32SFloatS8Uint;
 
     /// @brief frame()이 돌려주는 결과다.
     enum class Status : std::uint8_t {

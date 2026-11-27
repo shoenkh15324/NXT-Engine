@@ -252,7 +252,7 @@ void fillFixedStates(PipelineStates& states, const rhi::GraphicsPipelineDesc& de
  * @brief 깊이 테스트와 깊이 쓰기 상태를 채운다.
  *
  * stencil은 Phase 0에서 쓰지 않으므로 끈다. 깊이 비교 함수만 기술자에서 온다 —
- * 깊이 형식이 D32SFloat이든 D24UnormS8Uint이든 비교 방식은 같다.
+ * 깊이 형식이 D32SFloatS8Uint든 D24UnormS8Uint든 비교 방식은 같다.
  *
  * @param[in,out] states 채울 상태.
  * @param[in]     desc   깊이 상태를 읽을 기술자.
