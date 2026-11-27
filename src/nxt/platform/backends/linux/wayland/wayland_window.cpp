@@ -164,6 +164,9 @@ bool WaylandWindow::initialize(const WindowDesc& desc) {
         const char* waylandDisplay = std::getenv("WAYLAND_DISPLAY");
         NXT_LOG_ERROR(Platform, Window, "wl_display_connect failed (WAYLAND_DISPLAY={})",
                       (waylandDisplay != nullptr) ? waylandDisplay : "(unset)");
+        // Wayland이 유일한 창 백엔드다. 다른 창 시스템으로 대체하지 않고 이유만 남긴다.
+        NXT_LOG_ERROR(Platform, Window,
+                      "is a Wayland compositor running? check WAYLAND_DISPLAY and XDG_RUNTIME_DIR");
         return false;
     }
 
