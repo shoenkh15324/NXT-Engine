@@ -44,7 +44,7 @@ A6에서 처음으로 전부 이어지고, A7에서 비로소 창에 무언가�
 ```mermaid
 flowchart BT
     core["nxt_core<br/>log · assert · time · memory · handle"]
-    platform["nxt_platform<br/>Window (HWND) · 이벤트 · 로그 sink"]
+    platform["nxt_platform<br/>Window (HWND / wl_surface) · 이벤트 · 로그 sink"]
     renderer["nxt_renderer<br/>Renderer · Pass — 무엇을 그릴지"]
     engine["nxt_engine<br/>FrameLoop — 언제 할지"]
     sandbox["sandbox<br/>창을 열고 루프를 돌린다"]
@@ -297,12 +297,13 @@ present는 제출 이후 큐에 남는 별개 연산이고 fence를 신호하지
 | **A1 환경** | 🟢 완료. SDK 1.4.363.0 설치, `find_package(Vulkan)` 동작 확인 |
 | **A2 스켈레톤 배선** | 🟢 완료. Vulkan 소스 0개로 target 7개 생성, 빌드·테스트 통과 |
 | **A3 창** | 🟢 완료. `Window` interface + `Win32Window` (HWND) |
-| **A4 RHI 경계와 수명** | 🟢 완료. `rhi/` 공개 헤더 + `instance`·`device` 백엔드, 링크 게이트 0, 헤더 단독 `/W4 /WX` 통과. Linux는 보류 |
+| **A4 RHI 경계와 수명** | 🟢 완료. `rhi/` 공개 헤더 + `instance`·`device` 백엔드, 링크 게이트 0, 헤더 단독 `/W4 /WX` 통과. Linux는 0-D에서 Wayland로 구현 |
 | **A5 RHI 자원과 동기** | 🟢 완료. 공개 헤더 6종 + 백엔드 6종(`memory`·`fence`·`semaphore`·`swapchain`·`command_buffer`·`resource_deletion`). 링크 게이트 통과. GPU 런타임 확인은 A7에서 |
 | **A6 프레임 루프** | 🟢 완료. `engine/frame_loop.{hpp,cpp}`. 레인 자원 소유와 out-of-date 반환 계약, 링크 게이트 통과. GPU 실행은 A7에서 |
 | **A7 0-A 검증** | 🟢 완료. 검증 레이어 ON에서 clear 색 채움(중앙 픽셀 89/124/149) · 자동 리사이즈 3회 · 정상 종료, VUID/ERROR 0건. fps 로그 145 |
-| **B 삼각형** | 🔴 미착수 |
-| **C 계층 배선** | 🔴 미착수 |
+| **B 삼각형** | 🟢 완료. `math`·`shader`·`pipeline`·`buffer`·`image`·`TrianglePass`. 삼각형 표시·깊이 테스트·RHI 경계 grep 0 |
+| **C 계층 배선** | 🟢 완료. `Engine`이 서브시스템과 프레임 루프를 소유. mesh 개수·닫기·리사이즈 검증 |
+| **D Linux (Wayland)** | 🟢 완료. WSLg에서 GCC 빌드, libdecor 장식 창, `VK_KHR_wayland_surface`. 리사이즈·최소화/복귀·닫기·MSVC 회귀·clangd 분석 확인 |
 
 Vulkan 런타임은 준비돼 있다 (RTX 4060, API 1.4.351).
 
@@ -411,8 +412,8 @@ platform은 `HWND`까지만 준다. `VkSurfaceKHR`를 만드는 일은 graphics�
 구현한다. `Instance::create()` 경로가 링크되면 끝난다. GPU 리소스와 프레임 동기는
 A5다 — 여기서는 만들지 않는다.
 
-플랫폼은 **Win32만 대상**이다. Linux surface 백엔드는 미루고 자리만 남긴다 (아래
-"백엔드 구현" 참조).
+이 단계에서는 플랫폼이 **Win32만 대상**이었다. Linux surface 백엔드는 자리만 남겼고,
+이후 0-D에서 Wayland로 구현했다 (아래 "백엔드 구현" 참조).
 
 구조와 CMake 배선 (완료)
 
@@ -549,8 +550,8 @@ resource/  GPU 리소스
 - [x] `core/vulkan_instance.cpp` (+ `core/vulkan_instance_win32.cpp`) — 플랫폼 분기
 - [x] `core/vulkan_device.cpp` — 물리 디바이스·queue family 선택, 논리 디바이스 생성
 
-`core/vulkan_instance_linux.cpp`는 **보류**다. 지금은 Win32만 대상이라 XCB 구현을
-미룬다 — 빈 파일과 CMake의 `UNIX` 분기는 나중에 붙일 자리로만 남긴다.
+`core/vulkan_instance_linux.cpp`는 이 단계에서 빈 파일이었다. 0-D에서 Wayland Surface
+생성으로 채웠다. X11은 범위에서 제외한다.
 
 `resource/` · `frame/` 구현은 A5다.
 
@@ -863,6 +864,169 @@ depth는 어차피 Phase 3에 존재한다. 그때 넣으면 Phase 0의 렌더 �
 
 ---
 
+# 0-D — Linux (WSLg · Wayland)
+
+> 목표: 같은 엔진을 Linux에서 GCC로 빌드하고 Wayland 창으로 실행한다.
+>
+> 창 시스템은 플랫폼이 정한다. 실행 인자나 실행 중 선택으로 바꾸지 않는다.
+
+Linux는 Wayland 단일 백엔드다. 범위는 단일 창, 기존 렌더링, 로그, 이벤트, 리사이즈,
+종료다. 키보드·마우스 전체 입력 체계, 멀티 윈도우, 전용 렌더 스레드, 애셋 로딩은 제외한다.
+빌드·실행 예시는 아래 검증 기록에서 실제로 확인한 절차만 적는다.
+
+## D1. 빌드 기반
+
+- [x] POSIX 로그 sink(`posix_console_log_sink` · `posix_file_log_sink`)와 Sandbox의 OS별 sink 선택
+- [x] `LogSubsystem::Linux` 추가, 로그 파일은 실행 파일 옆 `logs/`(`/proc/self/exe` 기준)
+- [x] Win32 테스트는 Windows에서만 등록하고, Linux에서는 POSIX sink 계약 테스트를 실행
+- [x] GCC `-Wall -Wextra`에서 경고 0
+- [x] Linux 의존성은 `pkg-config`로 발견하고 개인 경로를 저장소에 넣지 않는다
+
+## D2. Wayland 실행
+
+### D2-1 프로토콜과 의존성
+
+- [x] `wayland-client` · `wayland-protocols` · `wayland-scanner`를 pkg-config로 발견
+- [x] 설치된 `xdg-shell.xml`에서 클라이언트 헤더·프로토콜 소스를 빌드 디렉터리에 생성
+- [x] 생성 소스를 위해 C11 활성화, 생성물은 커밋하지 않음
+- [x] xdg-shell에는 서버 장식이 없으므로 `libdecor-0`로 창 테두리를 그린다
+
+### D2-2 창과 이벤트 수명
+
+- [x] `wl_display` 연결, registry 바인딩, `wl_surface` 생성
+- [x] xdg_surface·xdg_toplevel과 제목·app ID는 libdecor가 만든다. 실패하면 무장식 xdg-shell로 폴백
+- [x] 최초 configure를 ack한 뒤 렌더링 가능 상태로 전환하고, 0 크기는 이전 논리 크기를 유지
+- [x] 논리 크기와 buffer 픽셀 크기를 분리하고 정수 scale을 적용 (fractional scaling은 범위 밖)
+- [x] `libdecor_dispatch(0)`로 소켓을 읽고 default 큐를 따로 디스패치해 프레임을 막지 않는다
+- [x] close·연결 오류 처리, 파괴 순서는 frame → decor → surface → 전역 → display
+
+### D2-3 Swapchain과 extent
+
+- [x] `currentExtent`가 미지정이면 창 크기를 쓰고 `minImageExtent`·`maxImageExtent`로 제한
+- [x] 크기 0에서는 프레임과 재생성을 부르지 않고 이전 extent를 유지
+- [x] 창 크기와 extent 비교로 재생성 빈도를 제한
+- [x] 깊이 형식은 `D32_SFLOAT_S8_UINT` (아래 dzn 이슈 참고)
+
+### D2-4 Vulkan 연결
+
+- [x] `NativeWindow{handle=wl_surface, display=wl_display}`로 `VK_KHR_wayland_surface` 생성
+- [x] Surface 확장은 빌드된 플랫폼이 정한다. 실행 중 종류를 고르지 않는다
+
+## D3. 회귀 검증
+
+| 항목 | 방법 | 결과 |
+|---|---|---|
+| 표시 | 지정한 크기로 실행 | 완료 — Wayland 창·Surface·프레임 정상 |
+| 대화형 리사이즈 | 창 가장자리 드래그 | 완료 — configure 반영, swapchain 재생성, 깨짐 없음 (사용자 확인) |
+| 최소화/복귀 | 타이틀바 버튼 | 완료 — 프레임 정지 후 재개, 디바이스 로스트 없음 (사용자 확인) |
+| 닫기 | 타이틀바 닫기 버튼 | 완료 — close 요청 수신 후 정상 종료 (사용자 확인) |
+| 연결 실패 | `WAYLAND_DISPLAY=wayland-99` | 완료 — 이유와 안내를 남기고 종료 코드 1 |
+| Windows 회귀 | MSVC 프리셋 빌드·테스트·실행 | 완료 — 유지 확인 (사용자 확인) |
+
+## D4. 개발 환경
+
+### 프리셋
+
+| 구성 | 프리셋 | 용도 |
+|---|---|---|
+| configure | `gcc` | Debug, 테스트 ON |
+| configure | `gcc-release` | RelWithDebInfo, 테스트 ON |
+| configure | `gcc-bench` | RelWithDebInfo, 테스트 OFF |
+| build | `gcc-debug`, `gcc-release`, `gcc-bench` | 위 구성에 대응 |
+| test | `gcc` | Debug 테스트 |
+
+단일 구성 Ninja이므로 configure 프리셋이 `CMAKE_BUILD_TYPE`을 지정한다.
+Windows MSVC 프리셋과 빌드 출력 경로를 공유하지 않고 Linux GCC(`gcc`, `g++`)를 지정한다.
+
+### 빌드와 실행
+
+```bash
+cmake --preset gcc
+cmake --build --preset gcc-debug --parallel
+ctest --preset gcc
+./build/gcc/apps/sandbox/sandbox --objects 1000 --culling on --log-level info
+```
+
+```bash
+cmake --preset gcc-release
+cmake --build --preset gcc-release --parallel
+./build/gcc-release/apps/sandbox/sandbox --objects 100000 --culling on --present immediate --log-level info
+```
+
+최초 configure에서 doctest를 받기 위한 네트워크 접근이 필요할 수 있다. Configure가 실패했으면
+바로 build하지 말고 원인을 먼저 해결한다. 컴파일러·SDK를 교체하면 `cmake --fresh`로 다시 구성한다.
+
+### VS Code와 clangd
+
+빌드는 GCC가 하고 clangd는 GCC의 `compile_commands.json`을 읽는다. clangd를 써도 빌드
+컴파일러가 Clang으로 바뀌지는 않는다.
+
+1. WSL 체크아웃을 연다. 좌측 아래가 `WSL: 배포판`이어야 한다.
+2. `cmake --preset gcc`로 `build/gcc/compile_commands.json`을 만든다.
+3. **WSL 체크아웃의 로컬** `.vscode/settings.json`에 프리셋과 DB를 지정한다.
+
+```json
+{
+    "cmake.cmakePath": "/usr/bin/cmake",
+    "cmake.useCMakePresets": "always",
+    "cmake.configurePreset": "gcc",
+    "cmake.buildPreset": "gcc-debug",
+    "cmake.testPreset": "gcc",
+    "clangd.path": "/usr/bin/clangd-18",
+    "clangd.arguments": [
+        "--compile-commands-dir=${workspaceFolder}/build/gcc",
+        "--query-driver=/usr/bin/g++",
+        "--background-index"
+    ],
+    "C_Cpp.intelliSenseEngine": "disabled"
+}
+```
+
+```bash
+clangd-18 --check=src/nxt/engine/engine.cpp \
+    --compile-commands-dir=build/gcc \
+    --query-driver=/usr/bin/g++
+```
+
+`--query-driver`는 지정한 GCC에서 표준 헤더 검색 경로를 얻기 위한 허용 목록이다.
+신뢰하는 컴파일러만 지정한다. Windows의 `build/msvc`, `cl.exe`를 읽으면 설정이 섞인 것이다.
+
+## 검증 기록 (2026-11-27, WSLg)
+
+| 항목 | 값 |
+|---|---|
+| 환경 | WSL2 + WSLg, `WAYLAND_DISPLAY=wayland-0` |
+| 빌드 도구 | GCC 13.3.0, CMake 3.28.3, Ninja |
+| Wayland | wayland-client 1.22.0, wayland-protocols 1.45 |
+| 창 장식 | libdecor 0.2.2, 플러그인 `-cairo` · `-gtk` |
+| Vulkan | 헤더·런타임 1.3.275, ICD `dzn`(D3D12) · `lavapipe` |
+
+- `gcc`·`gcc-release` 프리셋 빌드에서 경고 0, `ctest --preset gcc` 5/5 통과
+  (플랫폼 테스트 20케이스, POSIX sink).
+- Wayland 창: configure 1280x720, `scale 1`, `VK_KHR_wayland_surface`, swapchain 4장
+  `B8G8R8A8Srgb` Fifo. libdecor가 타이틀바(1280x37)와 그림자를 그려 창 전체는 1328x768이다.
+- 1000 오브젝트: 약 59fps, validation ERROR/VUID 0건, `gpu p50 0.12ms`.
+- 100000 오브젝트: draws=65025, dzn에서 초당 9프레임 수준(CPU 병목), 디바이스 로스트 없음.
+- RelWithDebInfo(`gcc-release`): 배너 `Build Type : RelWithDebInfo`, validation OFF.
+- clangd-18이 `build/gcc`의 GCC DB로 `engine.cpp`를 분석한다.
+- 연결 실패: `wl_display_connect failed`와 컴포지터 확인 안내 후 종료 코드 1.
+
+검증하지 못한 것: fractional scaling, 네이티브 Linux(비 WSLg).
+
+## WSLg dzn 이슈
+
+WSLg 기본 ICD인 `dzn`(Vulkan-on-D3D12)은 `VK_FORMAT_D32_SFLOAT` 깊이 부착물을 render pass에서
+clear할 때 GPU를 멈춘다. 약 4초 뒤 `VK_ERROR_DEVICE_LOST`로 디바이스가 제거된다. 색만 clear하거나
+`D32_SFLOAT_S8_UINT`·`D24_UNORM_S8_UINT`를 쓰면 정상이다. 엔진은 `FrameLoop::kDepthFormat`을
+`D32SFloatS8Uint`로 고정해 회피했고, 깊이 정밀도는 32비트 그대로다.
+재현 표와 분석은 [issues/0001-dzn-d32-sfloat-depth-clear.md](../issues/0001-dzn-d32-sfloat-depth-clear.md)에 있다.
+
+## 범위 밖
+
+- fractional scaling, 네이티브 Linux(비 WSLg), X11
+
+---
+
 ## 제외
 
 - CPU 런타임 (`jobs` `event` `concurrency`) → [Phase 1](phase1.md)
@@ -871,7 +1035,7 @@ depth는 어차피 Phase 3에 존재한다. 그때 넣으면 Phase 0의 렌더 �
 - Descriptor set · bindless · async compute → Phase 4 이후
 - Material / lighting → Phase 3
 - SIMD · Vulkan 파이프라인 고도화 → 측정 없이 도입하지 않는다
-- Linux backend → **보류.** Phase 0는 Win32만 대상이다. 착수 조건은 Vulkan 로더로 교체 가능한지 확인되는 때
+- macOS 등 Windows·Linux 외 플랫폼 → Phase 0는 Windows(Win32)와 Linux(Wayland, 0-D)만 대상이다
 
 ## 착수 시 결정할 것
 
@@ -883,7 +1047,7 @@ depth는 어차피 Phase 3에 존재한다. 그때 넣으면 Phase 0의 렌더 �
 | instance 확장 | `VK_EXT_debug_utils`만 | **결정됨 — A7에서 구현.** `InstanceDesc::enableValidation`이 검증 레이어를 정한다. Debug 기본 ON, 레이어가 없으면 경고 후 계속한다 |
 | `render pass` 이름 충돌 | RHI는 기술자(descriptor) | **결정됨 — `rhi::RenderPassDesc`.** renderer 쪽 `RenderPass`(개별 패스)와 구분한다 |
 | 디렉터리 분류 | 파일이 늘면 기능별로 나눈다 | **결정됨 — `common` · `core` · `frame` · `resource`.** `rhi/`와 `backends/vulkan/`이 같은 이름을 쓴다. 한쪽만 다르면 새 파일을 어디에 넣을지 매번 헷갈린다 |
-| 플랫폼 분기 | 파일 분리 | **결정됨 — `vulkan_instance_win32.cpp` · `vulkan_instance_linux.cpp`.** CMake가 이 플랫폼의 하나만 빌드에 넣는다. `#if`로 한 파일에 몰아넣지 않는다 — Linux는 X11 · Wayland 둘을 가질 수 있다. **구현은 Win32만 한다** — Linux는 자리만 두고 보류라 `vulkan_instance_linux.cpp`는 빈 파일이다 |
+| 플랫폼 분기 | 파일 분리 | **결정됨 — `vulkan_instance_win32.cpp` · `vulkan_instance_linux.cpp`.** CMake가 이 플랫폼의 하나만 빌드에 넣는다. `#if`로 한 파일에 몰아넣지 않는다. Linux는 Wayland 하나로 확정했고(0-D) `vulkan_instance_linux.cpp`가 Wayland Surface를 만든다. X11은 범위에서 제외한다 |
 | 엔진 이름·버전 | 코드에 상수로 박기 | **결정됨 — 루트 `project()`에서 주입.** `PROJECT_NAME`이 `NXT`라 `pEngineName`이 `NXT-Engine`에서 `NXT`로 바뀐다. 앱 이름은 앱 몫이라 A7에서 `InstanceDesc::appName`으로 옮겼다 |
 
 ### `frame.md`의 `graphics/runtime` 표기

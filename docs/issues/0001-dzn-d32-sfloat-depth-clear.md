@@ -152,7 +152,7 @@ Debug + validation 환경에서 확인했다. 임시 진단 스위치는 모두 
 
 ## 8. 참고
 
-- [linux-porting-draft.md](../roadmap/linux-porting-draft.md) — L1~L2 검증 기록과 실행 명령
+- [phase0.md](../roadmap/phase0.md) 0-D — Linux(Wayland) 포팅 검증 기록과 실행 명령
 - [rhi.md](../design/rhi.md) §7 — GPU 오류를 복구 불가로 처리하는 정책
 - [frame.md](../design/frame.md) — 프레임 수명과 present 소유권
 - `src/nxt/graphics/backends/vulkan/frame/vulkan_fence.cpp` — 디바이스 로스트 보고 지점
