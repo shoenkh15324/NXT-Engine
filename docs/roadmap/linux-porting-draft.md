@@ -333,17 +333,36 @@ L4에서 새 검증 기록을 만들고 실행 명령·결과·제한을 정리�
   Win32 테스트는 등록하지 않는다.
 - Wayland 창: 최초 configure 1280x720, `scale 1`, `VK_KHR_wayland_surface` 선택.
 - Swapchain: 이미지 4장, `B8G8R8A8Srgb`, `Fifo`, extent 1280x720.
-- 1000 오브젝트 실행: 약 57fps, validation ERROR/VUID 없음. 프레임 요약에 cpu/gpu/fence/draws가 나온다.
+- 1000 오브젝트 실행: 약 59fps, validation ERROR/VUID 없음. 프레임 요약에 cpu/gpu/fence/draws가 나온다.
+- 100000 오브젝트 실행: draws=65025, dzn(실제 GPU 경로)에서 초당 9프레임 수준, 디바이스 로스트 없음.
 - RelWithDebInfo + 100000 오브젝트: draws=65025, llvmpipe에서 약 12fps(소프트웨어 렌더러).
 
 검증하지 못한 것: 대화형 리사이즈·최소화/복귀·창 닫기(자동 조작 불가), fractional scaling,
 `--window-system` 정책(L3), clangd 분석, Windows MSVC 회귀, 네이티브 Linux.
 
-**WSLg 드라이버 제한:** 기본 ICD인 `dzn`은 "not a conformant Vulkan implementation" 경고를
-내고 몇 초 뒤 `VK_ERROR_DEVICE_LOST`로 디바이스를 잃는다. 엔진은 원인을 남기고 종료한다
-(`vulkan_fence.cpp` — `waitFence`가 `ErrorDeviceLost`를 보고). 위 실행 결과는 lavapipe로 얻었다.
+**WSLg dzn의 D32_SFLOAT 깊이 clear 버그:** 기본 ICD인 `dzn`(Vulkan-on-D3D12)은
+`VK_FORMAT_D32_SFLOAT` 깊이 부착물을 render pass에서 clear할 때 GPU를 멈춘다. 그러면 약
+4초 뒤 `VK_ERROR_DEVICE_LOST`로 디바이스가 제거되고, 엔진은 그 원인을 남기고 종료한다
+(`vulkan_fence.cpp`의 `waitFence`가 `ErrorDeviceLost`를 보고). 재현 조건을 나눠 확인한 결과:
+
+| 깊이 처리 | 결과 |
+|---|---|
+| 깊이 부착물 없음(색만 clear) | 정상 |
+| `D32_SFLOAT` + `loadOp = DontCare` | 정상 |
+| `D32_SFLOAT` + `loadOp = Clear` | 디바이스 로스트 |
+| `D32_SFLOAT` + `loadOp = Clear` + `storeOp = Store` | 디바이스 로스트 |
+| `D24_UNORM_S8_UINT` + `loadOp = Clear` | 정상 |
+| `D32_SFLOAT_S8_UINT` + `loadOp = Clear` | 정상 |
+
+그래서 깊이 형식을 `D32SFloatS8Uint`로 고정했다(`FrameLoop::kDepthFormat`). 깊이 정밀도는
+32비트로 같고 스텐실은 아직 쓰지 않는다. 위 실행 결과는 dzn에서 얻었으며 lavapipe로도 같은
+동작을 확인했다. 깊이 전용 `D32_SFLOAT`를 계속 쓰려면 이 드라이버가 고쳐져야 한다.
 
 ```bash
+# WSLg 기본 경로 (dzn)
+./build/linux-debug/apps/sandbox/sandbox --objects 1000 --log-level info
+
+# 소프트웨어 렌더러로 비교할 때
 VK_DRIVER_FILES=/usr/share/vulkan/icd.d/lvp_icd.json \
     ./build/linux-debug/apps/sandbox/sandbox --objects 1000 --log-level info
 ```
