@@ -12,6 +12,7 @@ add_executable(nxt_core_tests
     pool_test.cpp
     thread_source_test.cpp
     job_counter_test.cpp
+    spsc_queue_test.cpp
 )
 
 target_link_libraries(nxt_core_tests PRIVATE

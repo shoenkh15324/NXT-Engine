@@ -16,6 +16,7 @@ target_sources(nxt_core
         FILE_SET HEADERS
         BASE_DIRS "${PROJECT_SOURCE_DIR}/src"
         FILES
+            concurrency/spsc_queue.hpp
             handle/handle.hpp
             handle/handle_manager.hpp
             diagnostics/assert.hpp
