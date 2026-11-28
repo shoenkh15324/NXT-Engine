@@ -10,6 +10,7 @@ add_library(nxt_core STATIC
     jobs/std_thread_source.cpp
     jobs/job_counter.cpp
     jobs/worker.cpp
+    jobs/worker_pool.cpp
 )
 
 target_sources(nxt_core
@@ -33,6 +34,7 @@ target_sources(nxt_core
             jobs/job.hpp
             jobs/job_counter.hpp
             jobs/worker.hpp
+            jobs/worker_pool.hpp
 )
 
 target_include_directories(nxt_core PUBLIC "${PROJECT_SOURCE_DIR}/src")
