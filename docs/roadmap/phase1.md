@@ -173,7 +173,7 @@ Phase 2의 비동기 로딩도 이 런타임을 전제로 한다.
   - 테스트용 fake source를 둔다.
 - **완료 조건:** fake source로 생성·종료 테스트가 통과하고, std source로 실제 스레드를 만들고 join한다.
 
-### 1-B2 — Job과 JobCounter
+### 1-B2 — Job과 JobCounter (완료)
 
 - **목표:** 잡 하나의 실행 단위와 N개 완료 대기를 제공한다.
 - **작업 내용:**

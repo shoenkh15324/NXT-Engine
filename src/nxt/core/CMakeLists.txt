@@ -8,6 +8,7 @@ add_library(nxt_core STATIC
     diagnostics/log.cpp
     diagnostics/profiler.cpp
     jobs/std_thread_source.cpp
+    jobs/job_counter.cpp
 )
 
 target_sources(nxt_core
@@ -27,6 +28,8 @@ target_sources(nxt_core
             memory/pool.hpp
             jobs/thread_source.hpp
             jobs/std_thread_source.hpp
+            jobs/job.hpp
+            jobs/job_counter.hpp
 )
 
 target_include_directories(nxt_core PUBLIC "${PROJECT_SOURCE_DIR}/src")

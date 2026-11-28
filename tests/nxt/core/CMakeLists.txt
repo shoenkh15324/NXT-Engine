@@ -11,6 +11,7 @@ add_executable(nxt_core_tests
     arena_test.cpp
     pool_test.cpp
     thread_source_test.cpp
+    job_counter_test.cpp
 )
 
 target_link_libraries(nxt_core_tests PRIVATE
