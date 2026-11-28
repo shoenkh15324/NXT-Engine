@@ -83,7 +83,7 @@ public:
     /**
      * @brief index번째 worker를 반환한다.
      *
-     * @param[in] index 0 이상 workerCount() 미만
+     * @param[in] index 0 이상 workerCount() 미만.
      */
     [[nodiscard]]
     Worker& worker(std::size_t index) noexcept;

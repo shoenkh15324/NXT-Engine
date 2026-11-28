@@ -177,7 +177,7 @@ Phase 2의 비동기 로딩도 이 런타임을 전제로 한다.
 - **작업 내용:**
   - `jobs/job.hpp`에 실행 함수와 카운터 포인터를 둔다.
   - `jobs/job_counter.hpp/.cpp`에 atomic 카운터와 `wait()`를 둔다.
-  - 소유권 계약을 주석과 assert로 고정한다. `job_handle.hpp` 스텁은 삭제한다.
+  - 소유권 계약을 주석과 assert로 고정한다. (`job_handle.hpp` 스텁은 1-B1에서 삭제됐다.)
 - **완료 조건:** N개 완료 후 `wait()`가 반환하고, 대기 전 파괴를 assert가 막는다.
 
 ### 1-B3 — worker별 SPSC 큐 (완료)

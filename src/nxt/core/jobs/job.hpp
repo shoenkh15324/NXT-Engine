@@ -21,11 +21,11 @@ using JobFunction = std::function<void()>;
  *       제출자만 만지고, 큐에 들어간 뒤에는 worker 하나만 만진다.
  */
 struct Job {
-    /// @brief 실행할 함수이다. 비어있으면 안 된다.
+    /// @brief 실행할 함수이다. 비어 있으면 안 된다.
     JobFunction run;
 
     /**
-     * @brief 이 잡의 완료를 아릴ㄹ 카운터이다. null이면 안된다.
+     * @brief 이 잡의 완료를 알릴 카운터이다. null이면 안 된다.
      *
      * @note 소유하지 않는다. 제출자가 소유하며, 이 잡이 완료를 알릴 때까지 살아
      *       있어야 한다.

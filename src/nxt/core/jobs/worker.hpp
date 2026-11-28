@@ -64,7 +64,7 @@ public:
     void stop() noexcept;
 
     /**
-     * @brief 워커 스레드가 끝날 때까지 기다린다. join() 뒤 running()은 false이다
+     * @brief 워커 스레드가 끝날 때까지 기다린다. join() 뒤 running()은 false이다.
      *
      * @note stop()을 먼저 부른다. stop() 없이 부르면 루프가 끝나지 않아 멈춘다.
      */
@@ -74,7 +74,7 @@ public:
      * @brief 잡 하나를 큐에 넣는다.
      *
      * @param[in] job 넣을 잡. 성공하면 move된다.
-     * @return 넣었으면 true, 큐가 가득차면 false.
+     * @return 넣었으면 true, 큐가 가득 차면 false.
      *
      * @note stop() 뒤에는 부르지 않는다.
      */
